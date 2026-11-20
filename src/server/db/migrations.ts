@@ -718,9 +718,10 @@ export const MIGRATIONS: Migration[] = [
     statements: [
       // Runs only after the admin runbook step 6.2 pre-check has passed: every users row with role = 'staff'
       // exists in employees with the same id (no staff missing from employees). This delete cannot be undone.
+      // Every statement is safe to re-run (IF EXISTS, MariaDB 10.5+): a failure midway is fixed by migrating again.
       "DELETE FROM users WHERE role = 'staff'",
-      "ALTER TABLE users DROP FOREIGN KEY users_staff_role_fk",
-      "ALTER TABLE users DROP COLUMN staff_role_id, DROP COLUMN totp_secret, DROP COLUMN totp_enabled, DROP COLUMN totp_last_step, DROP COLUMN must_change_password",
+      "ALTER TABLE users DROP FOREIGN KEY IF EXISTS users_staff_role_fk",
+      "ALTER TABLE users DROP COLUMN IF EXISTS staff_role_id, DROP COLUMN IF EXISTS totp_secret, DROP COLUMN IF EXISTS totp_enabled, DROP COLUMN IF EXISTS totp_last_step, DROP COLUMN IF EXISTS must_change_password",
       "DROP TABLE IF EXISTS staff_roles",
     ],
   },
