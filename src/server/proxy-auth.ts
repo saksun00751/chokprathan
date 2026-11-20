@@ -4,6 +4,9 @@ import { endedParam, type SessionEnd } from "@/domain/sessions";
 import { memo } from "@/server/cache";
 import { q1, tolerateMissingTable } from "@/server/db";
 
+/** The back office now lives in its own app: its old addresses on the member site answer 404. */
+export const isRemovedPath = (logical: string) => /^\/(admin|console)(\/|$)/.test(logical);
+
 export type SessionGate = { role: "staff" | "member" } | { role: null; ended: SessionEnd | null };
 
 /**

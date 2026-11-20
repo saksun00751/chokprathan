@@ -9,6 +9,7 @@ import {
   createLoginChallenge,
   createSession,
   enableTotp,
+  hashPassword,
   issueOtp,
   registerMember,
   revokeAllSessions,
@@ -102,6 +103,17 @@ describe.skipIf(!hasTestDb)("auth on MariaDB", () => {
       expect((await checkLogin("0811111111", "secret123", client, now)).ok).toBe(true);
       expect((await checkLogin("0811111111", "wrong-pass", client, now)).ok).toBe(false);
       expect(await q1("SELECT event FROM auth_log WHERE event = 'login_failed'")).toEqual({ event: "login_failed" });
+    });
+
+    test("a staff row in users cannot sign in as a member", async () => {
+      // The member login only knows members, whether the staff row is found by username or by phone.
+      const hash = await hashPassword("pw-12345");
+      await run(
+        "INSERT INTO users (id, username, phone, password_hash, name, role, ref_code, created_at) VALUES (900, 'boss', '0899999999', ?, 'Boss', 'staff', 'ZZZZZZ', 1)",
+        hash,
+      );
+      expect(await checkLogin("boss", "pw-12345", { ip: null, userAgent: null }, now)).toMatchObject({ ok: false });
+      expect(await checkLogin("0899999999", "pw-12345", { ip: null, userAgent: null }, now)).toMatchObject({ ok: false });
     });
 
     test("five failures lock the identifier for 15 minutes", async () => {
