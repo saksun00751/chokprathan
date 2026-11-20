@@ -1362,7 +1362,7 @@ Run → this already passes for phone logins; it guards the contract step. Add a
   - `git rm -r` the paths above, then `npm run typecheck` and fix every remaining import.
   - `src/proxy.ts`: remove `STAFF_COOKIE`, the `/admin/login` redirect, the whole `isAdmin` block and the `?ended` handling for `/console`; add at the top of the matching logic: `if (isRemovedPath(logical)) return new NextResponse(null, { status: 404 });`.
   - `src/server/services/scheduler.ts`: remove `ensureRounds`, `autoResults`, `resumeSettlements`, `settlePendingGuesses`, `expireDeposits`, `sealAudit`, `verifyAudit`, `rollupStats`, `simulateCrowd`; keep `pruneSessions`, `pruneRateLimits`, `syncCatalog`, `closeGameDay`; keep the lock name `chokprathan:scheduler`.
-  - `src/server/services/auth.ts`: `checkLogin` loses `door`/staff branches (members only); remove `enableTotp`, `disableTotp`, `completeLoginChallenge`, `createLoginChallenge`, `STAFF_*`; `userFromToken` loses the staff join and idle rule; `sessionCookieName` returns `SESSION_COOKIE` only. `Role` type narrows to `"member"` only after Task 15, so keep it as is for now.
+  - `src/server/services/auth.ts`: `checkLogin` loses `door`/staff branches (members only); remove `enableTotp`, `disableTotp`, `completeLoginChallenge`, `createLoginChallenge`, `STAFF_*`; `userFromToken` loses the staff join and idle rule; `sessionCookieName` returns `SESSION_COOKIE` only. Keep the `Role` type as is: Task 15 keeps the `role` column (every row is `"member"` after it).
   - `src/app/media/[name]/route.ts`: slips are served only to their owner (remove the `staff` branch and `STAFF_COOKIE`).
   - `seed.ts` / `scripts/db.ts`: remove `createStaff`, role seeding and the owner creation; `setup` now only migrates and seeds business data (owner creation moves to the admin repo's `create-owner`).
 - [ ] **Step 3: Verify** — `npm test && npm run typecheck && npm run lint && npm run build`; `grep -rn "staff" src --include='*.ts' --include='*.tsx' | grep -v i18n` should only show the legacy `role` column in migrations/auth until Task 15.
@@ -1379,12 +1379,19 @@ import { describe, expect, it } from "vitest";
 import { hasTestDb } from "@/test/db";
 import { q1 } from "@/server/db";
 
+const column = (col: string) =>
+  q1("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?", col);
+
 describe.skipIf(!hasTestDb)("contract migration 9", () => {
-  it("removes staff from users", async () => {
-    for (const col of ["role", "staff_role_id", "staff_note", "totp_secret", "totp_enabled", "totp_last_step", "must_change_password"]) {
-      expect(await q1("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = ?", col), col).toBeUndefined();
+  it("removes the staff columns and staff_roles from the member schema", async () => {
+    for (const col of ["staff_role_id", "totp_secret", "totp_enabled", "totp_last_step", "must_change_password"]) {
+      expect(await column(col), col).toBeUndefined();
     }
     expect(await q1("SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'staff_roles'")).toBeUndefined();
+  });
+
+  it("keeps users.role and users.staff_note (the admin filters role = 'member' and writes staff_note as the member note)", async () => {
+    for (const col of ["role", "staff_note"]) expect(await column(col), col).toBeTruthy();
   });
 });
 ```
@@ -1396,15 +1403,19 @@ describe.skipIf(!hasTestDb)("contract migration 9", () => {
     version: 9,
     name: "remove staff from users",
     statements: [
+      // Runs only after the admin runbook step 6.2 pre-check has passed: every users row with role = 'staff'
+      // exists in employees with the same id (no staff missing from employees). This delete cannot be undone.
       "DELETE FROM users WHERE role = 'staff'",
       "ALTER TABLE users DROP FOREIGN KEY users_staff_role_fk",
-      "ALTER TABLE users DROP INDEX users_role_created, ADD INDEX users_created (created_at)",
-      "ALTER TABLE users DROP COLUMN role, DROP COLUMN staff_role_id, DROP COLUMN staff_note, DROP COLUMN totp_secret, DROP COLUMN totp_enabled, DROP COLUMN totp_last_step, DROP COLUMN must_change_password",
+      "ALTER TABLE users DROP COLUMN staff_role_id, DROP COLUMN totp_secret, DROP COLUMN totp_enabled, DROP COLUMN totp_last_step, DROP COLUMN must_change_password",
       "DROP TABLE IF EXISTS staff_roles",
     ],
   },
 ```
-Then remove the now-dead `role = 'member'` filters (`grep -rn "role = 'member'\|role === \"member\"" src`), the `Role` type, and `staff_roles` from `APP_TABLES`. `sessions.user_id` rows of deleted staff are removed by `ON DELETE CASCADE`.
+Deliberately NOT touched: `users.role` (the ENUM stays; afterwards every row is `'member'`), `users.staff_note` (the member
+note, written by the admin) and the `users_role_created` index. So the `role = 'member'` filters in both apps keep working
+and need no change; dropping `role` later is optional cleanup once neither app filters on it. Remove `staff_roles` from
+`APP_TABLES`. `sessions.user_id` rows of deleted staff are removed by `ON DELETE CASCADE`.
 
 - [ ] **Step 3: Run** `npm test` (expect the new test to pass and no regressions), `npm run typecheck`, `npm run lint`.
 - [ ] **Step 4: Commit** — `git add -A && git commit -m "feat(db): contract — drop staff from users"`.
@@ -1460,7 +1471,7 @@ Each `invalidate(...)` called from an admin-triggered write matches a `memo` key
 
 Phase A (Tasks 1–12), Task 17 and Tasks 13/16 were executed in `chokprathan-admin`; these facts changed the plan:
 
-1. **Task 15 (migration 9) must NOT run until the admin repo is changed first.** Admin code still filters `users.role = 'member'` in ~20 places (`actions/admin.ts`, `data/admin.ts`, `data/dashboard.ts`, `stats/build.ts`, `services/members.ts`, `services/blocklist.ts`) and uses `users.staff_note` as the *member note* (`actions/admin.ts` `UPDATE users SET staff_note`). Required before migration 9: (a) an admin task that removes every `role = 'member'` filter (after the contract step all rows are members; keep the filter until then), (b) decide the fate of `staff_note`: it is member data in practice, so migration 9 should **keep** it (drop only `role`, `staff_role_id`, `totp_*`, `must_change_password`, and the FK/index), or rename it to `member_note` in both apps, (c) update `scripts/grants.sql` (`UPDATE (…, staff_note)`) to match. `importStaff` reads the legacy columns and is a no-op once they are gone (already guarded).
+1. **Task 15 (migration 9) keeps `users.role` and `users.staff_note` (resolved 2026-11-21).** Admin code filters `users.role = 'member'` in ~20 places (`actions/admin.ts`, `data/admin.ts`, `data/dashboard.ts`, `stats/build.ts`, `services/members.ts`, `services/blocklist.ts`) and uses `users.staff_note` as the *member note* (`actions/admin.ts` `UPDATE users SET staff_note`), so the original migration 9 (which dropped both) would have broken the admin. Decision: migration 9 deletes the staff rows (after the runbook pre-check that they all exist in `employees`), drops FK `users_staff_role_fk`, columns `staff_role_id`, `totp_secret`, `totp_enabled`, `totp_last_step`, `must_change_password`, and table `staff_roles`; it keeps `role`, `staff_note` and the `users_role_created` index. Afterwards every `users` row is a member, so the `role = 'member'` filters keep working: no admin code change is needed before migration 9, and `scripts/grants.sql` (`UPDATE (…, staff_note)`) stays as is. `importStaff` now requires `staff_roles`, `users.role` and `users.staff_role_id` to all exist and otherwise returns `{ roles: 0, employees: 0 }` without error (admin commit 9e59a89 "fix(import-staff): do nothing once the contract step has run"); before that fix it checked only `role` and would have failed with `ER_NO_SUCH_TABLE` after the contract step. Removing `role` later is optional cleanup once neither app filters on it.
 2. **`memo` staleness (member, Task 17 follow-up, branch `admin-split/prep`, commit 3876161).** `memo` used to serve a stale value of any age; after the split the admin cannot invalidate the member process, so a quiet process could accept the first bet at an old rate. Fixed: stale values are served only up to 2x TTL. Worst case for `settings`/`lottos` (bet-relevant) is ~10 s (~5 s on a busy site); a hard 5 s ceiling would need 2.5 s TTLs (double the queries).
 3. **Member DDL.** `chok_member` has no DDL rights. The member app must run with `DB_AUTO_MIGRATE=false` and migrations run with a separate privileged user (runbook step 0a). `grants.sql` must be applied after the member migrations.
 4. **Employee ids vs member ids.** `employees.id` keeps old staff ids, so new employees would reuse ids that exist in `users`. Optional runbook step 2.5 sets `ALTER TABLE employees AUTO_INCREMENT = 1000000000` (fits INT). Decide before Switch.

@@ -36,7 +36,10 @@ DB user, session, cookie และ deploy ของสองแอปออก�
 (คอลัมน์เหล่านี้ไม่มี FK อยู่แล้ว) ตารางพนักงานมี AUTO_INCREMENT ของตัวเอง เริ่มที่ max(id เดิม)+1
 
 ### `users` หลังแยก
-เหลือเฉพาะ member; ตัดคอลัมน์ `role`, `staff_role_id`, `staff_note`, `totp_*` (ในระยะ contract)
+เหลือเฉพาะ member; ในระยะ contract ลบแถว staff, ลบ FK `users_staff_role_fk`, ตัดคอลัมน์ `staff_role_id`, `totp_*`,
+`must_change_password` และลบตาราง `staff_roles` แต่ **เก็บ** `role` และ `staff_note` ไว้ เหตุผล: admin กรอง `role = 'member'`
+หลายจุด และใช้ `staff_note` เป็นบันทึกของพนักงานต่อสมาชิก (เป็นข้อมูลสมาชิกจริง) หลัง contract ทุกแถวเป็น `member`
+ตัวกรองเดิมจึงยังถูกต้องโดยไม่ต้องแก้โค้ด admin (`role` เหลือเป็นคอลัมน์ค่าเดียว จะลบทีหลังได้เมื่อทั้งสองแอปเลิกกรองด้วยมัน)
 
 ### ตารางธุรกิจร่วม (admin อ่าน/เขียนตรง)
 `rounds`, `lottos`, `bills`, `bill_items`, `deposits`, `withdrawals`, `transactions`, `bank_accounts`,
