@@ -40,7 +40,7 @@ export async function AccountArea() {
         </ButtonLink>
       </div>
       <AccountMenu name={viewer.name || viewer.phone || t.site.account.member} />
-      <SessionWatch door="member" />
+      <SessionWatch />
     </div>
   );
 }

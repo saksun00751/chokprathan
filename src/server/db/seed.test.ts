@@ -14,13 +14,13 @@ const client = { ip: null, userAgent: null };
 describe.skipIf(!hasTestDb || !process.env.TEST_SEED)("staging seed", () => {
   beforeAll(async () => {
     await resetDb();
-    await seedEssentials({ mode: "staging", owner: { username: "owner", password: "Owner-pass-1234", name: "เจ้าของ", mustChange: false }, now });
+    await seedEssentials({ mode: "staging", now });
     await seedDemo({ now, days: 3 });
   }, 900_000);
 
-  test("demo and staff accounts can log in", async () => {
+  test("the demo member can log in, and the seed creates no staff", async () => {
     expect(await checkLogin("0812345678", "demo1234", client, now)).toMatchObject({ ok: true, role: "member" });
-    expect(await checkLogin("owner", "Owner-pass-1234", client, now, "staff")).toMatchObject({ ok: true, role: "staff" });
+    expect((await q1<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE role <> 'member'"))!.n).toBe(0);
   });
 
   test("history is settled and the ledger matches every balance", async () => {

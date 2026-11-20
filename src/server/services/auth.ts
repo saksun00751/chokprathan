@@ -1,15 +1,11 @@
 import "server-only";
-import type { Dict } from "@/i18n/dictionaries";
 import { fmt } from "@/i18n/format";
 import { errorsT } from "@/i18n/server";
 import { createHash, randomBytes, randomInt, scrypt as scryptCallback, scryptSync, timingSafeEqual, type ScryptOptions } from "node:crypto";
-import type { Door } from "@/domain/doors";
-import { hasPermission, type Permission } from "@/domain/permissions";
 import { endedParam, type SessionEnd } from "@/domain/sessions";
-import { DAY, HOUR, MINUTE } from "@/domain/time";
-import { json, q, q1, run, tolerateMissingTable, tx } from "@/server/db";
+import { DAY, MINUTE } from "@/domain/time";
+import { q, q1, run, tolerateMissingTable, tx } from "@/server/db";
 import { writeAuthLog } from "@/server/logs";
-import { matchTotp } from "@/server/totp";
 
 const SCRYPT: ScryptOptions = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const KEYLEN = 32;
@@ -49,15 +45,13 @@ export const sha256 = (value: string) => createHash("sha256").update(value).dige
 export const SESSION_COOKIE_BASE = "cp_session";
 /** `__Host-` pins the cookie to this exact host over HTTPS (no Domain, Path=/, Secure). */
 export const SESSION_COOKIE = process.env.NODE_ENV === "production" ? `__Host-${SESSION_COOKIE_BASE}` : SESSION_COOKIE_BASE;
-/** Staff sessions live in their own cookie: the customer site never reads it, the console never reads the member one. */
-export const STAFF_COOKIE = process.env.NODE_ENV === "production" ? "__Host-cp_staff" : "cp_staff";
-export const sessionCookieName = (door: Door) => (door === "staff" ? STAFF_COOKIE : SESSION_COOKIE);
 export const MEMBER_SESSION_TTL = 30 * DAY;
-export const STAFF_SESSION_TTL = 12 * HOUR;
-/** A staff session that sits unused this long is signed out. */
-export const STAFF_IDLE_TTL = 2 * HOUR;
 const TOUCH_EVERY = 5 * MINUTE;
 
+/**
+ * The `users.role` column keeps both values (it stays in the schema), but this app only signs
+ * members in: staff accounts and their sessions live in the back-office app.
+ */
 export type Role = "member" | "staff";
 
 export interface ClientInfo {
@@ -91,15 +85,14 @@ async function endSessions(where: string, args: unknown[], reason: StoredEnd, no
 }
 
 /**
- * Sign an account in on this device. One live session per account, members and staff alike:
- * every other session of the account ends here ("replaced"), so a shared or stolen password cannot
- * keep two devices in at once and the device that lost out is told why. Staff reach this only after
- * the 2-step code, so a password alone can never push the real owner out. The user row lock makes
- * two sign-ins at the same moment take turns: exactly one of them survives.
+ * Sign a member in on this device. One live session per account: every other session of the
+ * account ends here ("replaced"), so a shared or stolen password cannot keep two devices in at once
+ * and the device that lost out is told why. The user row lock makes two sign-ins at the same moment
+ * take turns: exactly one of them survives.
  */
-export async function createSession(userId: number, role: Role, client: ClientInfo, now = Date.now()) {
+export async function createSession(userId: number, _role: "member", client: ClientInfo, now = Date.now()) {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = now + (role === "staff" ? STAFF_SESSION_TTL : MEMBER_SESSION_TTL);
+  const expiresAt = now + MEMBER_SESSION_TTL;
   const replaced = await tx(async () => {
     await q1("SELECT id FROM users WHERE id = ? FOR UPDATE", userId);
     const ended = await endSessions("user_id = ?", [userId], "replaced", now, client.ip);
@@ -134,13 +127,6 @@ export interface SessionUser {
   bankAccount: string | null;
   bankName: string | null;
   createdAt: number;
-  /** staff only */
-  staffRoleId: number | null;
-  staffRoleName: string | null;
-  permissions: string[];
-  isOwner: boolean;
-  totpEnabled: boolean;
-  mustChangePassword: boolean;
 }
 
 interface UserRow {
@@ -159,12 +145,6 @@ interface UserRow {
   bank_account: string | null;
   bank_name: string | null;
   created_at: number;
-  staff_role_id: number | null;
-  totp_enabled: number;
-  must_change_password: number;
-  role_name: string | null;
-  role_permissions: string | null;
-  role_is_owner: number | null;
 }
 
 const toSessionUser = (r: UserRow): SessionUser => ({
@@ -182,32 +162,17 @@ const toSessionUser = (r: UserRow): SessionUser => ({
   bankAccount: r.bank_account,
   bankName: r.bank_name,
   createdAt: r.created_at,
-  staffRoleId: r.role === "staff" ? r.staff_role_id : null,
-  staffRoleName: r.role === "staff" ? r.role_name : null,
-  permissions: r.role === "staff" ? json.parse<string[]>(r.role_permissions, []) : [],
-  isOwner: r.role === "staff" && r.role_is_owner === 1,
-  totpEnabled: r.totp_enabled === 1,
-  mustChangePassword: r.must_change_password === 1,
 });
-
-export const can = (viewer: Pick<SessionUser, "role" | "permissions"> | null | undefined, need: Permission) =>
-  !!viewer && viewer.role === "staff" && hasPermission(viewer.permissions, need);
 
 export async function userFromToken(token: string, now = Date.now()): Promise<SessionUser | null> {
   if (!token || token.length > 100) return null;
   const hash = sha256(token);
   const row = await q1<UserRow & { last_seen_at: number }>(
-    `SELECT u.*, s.last_seen_at, r.name AS role_name, r.permissions AS role_permissions, r.is_owner AS role_is_owner
-     FROM sessions s JOIN users u ON u.id = s.user_id LEFT JOIN staff_roles r ON r.id = u.staff_role_id
-     WHERE s.token_hash = ? AND s.expires_at > ?`,
+    `SELECT u.*, s.last_seen_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?`,
     hash,
     now,
   );
   if (!row || row.status !== "active") return null;
-  if (row.role === "staff" && now - row.last_seen_at > STAFF_IDLE_TTL) {
-    await endSessions("token_hash = ?", [hash], "idle", now);
-    return null;
-  }
   if (now - row.last_seen_at > TOUCH_EVERY) await run("UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?", now, hash);
   return toSessionUser(row);
 }
@@ -237,23 +202,19 @@ export type SessionState = { state: "active"; role: Role } | { state: "ended"; r
 
 /**
  * Is the session behind `token` still alive? For the browser's periodic check: it reads only and
- * never counts as activity, so a staff screen left open still signs out when idle.
+ * never counts as activity.
  */
 export async function sessionState(token: string, now = Date.now()): Promise<SessionState> {
   const gone = { state: "ended", reason: "expired", at: null, ip: null } as const;
   if (!token || token.length > 100) return gone;
   const hash = sha256(token);
-  const row = await q1<{ role: Role; status: string; expires_at: number; last_seen_at: number }>(
-    "SELECT u.role, u.status, s.expires_at, s.last_seen_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?",
+  const row = await q1<{ role: Role; status: string; expires_at: number }>(
+    "SELECT u.role, u.status, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?",
     hash,
   );
   if (row) {
     if (row.status !== "active") return { ...gone, reason: "revoked" };
     if (row.expires_at <= now) return gone;
-    if (row.role === "staff" && now - row.last_seen_at > STAFF_IDLE_TTL) {
-      await endSessions("token_hash = ?", [hash], "idle", now);
-      return { ...gone, reason: "idle", at: now };
-    }
     return { state: "active", role: row.role };
   }
   const end = await sessionEndOf(token);
@@ -311,14 +272,13 @@ async function lockRemaining(identifier: string, ip: string | null, now: number)
   return 0;
 }
 
-export type LoginCheck = { ok: true; userId: number; role: Role; needsTotp: boolean } | { ok: false; error: string };
+export type LoginCheck = { ok: true; userId: number; role: "member" } | { ok: false; error: string };
 
 /**
- * Check a sign-in at one door: members by phone on the customer site, staff by username on the
- * console. An account at the wrong door is treated exactly like an unknown one (same error, same
- * failed-attempt count), so neither page reveals that the other kind of account exists.
+ * Check a member sign-in (by phone). Any other account, staff included, is treated exactly like an
+ * unknown one (same error, same failed-attempt count): staff sign in on the back-office app.
  */
-export async function checkLogin(identifier: string, password: string, client: ClientInfo, now = Date.now(), door: Door = "member"): Promise<LoginCheck> {
+export async function checkLogin(identifier: string, password: string, client: ClientInfo, now = Date.now()): Promise<LoginCheck> {
   const id = identifier.trim().slice(0, 100);
   const locked = await lockRemaining(id, client.ip, now);
   const e = await errorsT();
@@ -326,10 +286,8 @@ export async function checkLogin(identifier: string, password: string, client: C
     await authLog("login_locked", null, id, client, now);
     return { ok: false, error: fmt(e.auth.locked, { n: Math.ceil(locked / MINUTE) }) };
   }
-  const user = await q1<{ id: number; role: Role; status: string; password_hash: string; totp_enabled: number }>(
-    door === "staff"
-      ? "SELECT id, role, status, password_hash, totp_enabled FROM users WHERE username = ? AND role = 'staff'"
-      : "SELECT id, role, status, password_hash, totp_enabled FROM users WHERE phone = ? AND role = 'member' AND is_simulated = 0",
+  const user = await q1<{ id: number; status: string; password_hash: string }>(
+    "SELECT id, status, password_hash FROM users WHERE phone = ? AND role = 'member' AND is_simulated = 0",
     id,
   );
   const valid = await verifyPassword(password, user?.password_hash ?? "");
@@ -340,69 +298,7 @@ export async function checkLogin(identifier: string, password: string, client: C
   }
   if (user.status !== "active") return { ok: false, error: e.auth.suspended };
   await run("DELETE FROM login_attempts WHERE identifier = ?", id);
-  return { ok: true, userId: user.id, role: user.role, needsTotp: user.role === "staff" && user.totp_enabled === 1 };
-}
-
-/* ---------- two-step sign-in for staff with an authenticator app ---------- */
-
-const CHALLENGE_TTL = 5 * MINUTE;
-
-export async function createLoginChallenge(userId: number, next: string, now = Date.now()) {
-  const token = randomBytes(32).toString("base64url");
-  await run(
-    "INSERT INTO login_challenges (token_hash, user_id, next_path, attempts, expires_at) VALUES (?, ?, ?, 0, ?)",
-    sha256(token),
-    userId,
-    next.slice(0, 200),
-    now + CHALLENGE_TTL,
-  );
-  return { token, expiresAt: now + CHALLENGE_TTL };
-}
-
-export async function completeLoginChallenge(
-  token: string,
-  code: string,
-  client: ClientInfo,
-  now = Date.now(),
-): Promise<{ ok: true; userId: number; next: string } | { ok: false; error: string; expired?: boolean }> {
-  const hash = sha256(token);
-  const e = await errorsT();
-  return tx(async () => {
-    const c = await q1<{ user_id: number; next_path: string; attempts: number; expires_at: number }>(
-      "SELECT user_id, next_path, attempts, expires_at FROM login_challenges WHERE token_hash = ? FOR UPDATE",
-      hash,
-    );
-    if (!c || c.expires_at < now) return { ok: false as const, error: e.auth.challengeExpired, expired: true };
-    if (c.attempts >= 5) {
-      await run("DELETE FROM login_challenges WHERE token_hash = ?", hash);
-      return { ok: false as const, error: e.auth.totpTooMany, expired: true };
-    }
-    const user = await q1<{ totp_secret: string | null; totp_last_step: number | null; status: string }>(
-      "SELECT totp_secret, totp_last_step, status FROM users WHERE id = ? FOR UPDATE",
-      c.user_id,
-    );
-    const step = user?.totp_secret ? matchTotp(user.totp_secret, code, now, user.totp_last_step) : null;
-    if (!user || user.status !== "active" || step === null) {
-      await run("UPDATE login_challenges SET attempts = attempts + 1 WHERE token_hash = ?", hash);
-      await authLog("2fa_failed", c.user_id, null, client, now);
-      return { ok: false as const, error: e.auth.totpWrong };
-    }
-    await run("UPDATE users SET totp_last_step = ? WHERE id = ?", step, c.user_id);
-    await run("DELETE FROM login_challenges WHERE token_hash = ?", hash);
-    return { ok: true as const, userId: c.user_id, next: c.next_path };
-  });
-}
-
-/** Turn on 2FA after the staff member proves the app shows the right code. */
-export async function enableTotp(userId: number, secret: string, code: string, now = Date.now()): Promise<boolean> {
-  const step = matchTotp(secret, code, now);
-  if (step === null) return false;
-  await run("UPDATE users SET totp_secret = ?, totp_enabled = 1, totp_last_step = ? WHERE id = ? AND role = 'staff'", secret, step, userId);
-  return true;
-}
-
-export async function disableTotp(userId: number) {
-  await run("UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_last_step = NULL WHERE id = ?", userId);
+  return { ok: true, userId: user.id, role: "member" };
 }
 
 /* ---------- OTP by SMS (shown on screen in demo mode) ---------- */
@@ -559,13 +455,6 @@ export async function changePassword(userId: number, current: string, next: stri
   const row = await q1<{ password_hash: string }>("SELECT password_hash FROM users WHERE id = ?", userId);
   if (!row || !(await verifyPassword(current, row.password_hash))) return { ok: false, error: e.auth.currentWrong };
   if (await verifyPassword(next, row.password_hash)) return { ok: false, error: e.auth.sameAsOld };
-  await run("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?", await hashPassword(next), userId);
+  await run("UPDATE users SET password_hash = ? WHERE id = ?", await hashPassword(next), userId);
   return { ok: true };
-}
-
-/** A password policy staff accounts must meet (members keep the simpler 8+ rule). */
-export function staffPasswordProblem(password: string, e: Pick<Dict["errors"], "auth">): string | null {
-  if (password.length < 10) return e.auth.staffShort;
-  if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) return e.auth.staffMix;
-  return null;
 }

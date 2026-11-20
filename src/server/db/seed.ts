@@ -1,6 +1,6 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { BET_TYPES, betTypesFor } from "@/domain/betTypes";
-import { DEFAULT_ROLES } from "@/domain/permissions";
 import { DAY, HOUR, MINUTE } from "@/domain/time";
 import type { BetTypeCode, ResultFormat, RoundResult } from "@/domain/types";
 import { deriveResult } from "@/domain/match";
@@ -9,9 +9,7 @@ import { hashPasswordSync } from "@/server/services/auth";
 import { placeBill, type SlipLine } from "@/server/services/bills";
 import { approveDeposit, approveWithdrawal, createDeposit, requestWithdrawal } from "@/server/services/finance";
 import { ensureRounds, randomResult, setResult } from "@/server/services/rounds";
-import { hotNumbers } from "@/server/services/scheduler";
 import { getSettings, setSetting } from "@/server/services/settings";
-import { createStaff } from "@/server/services/staff";
 import { BANNER_I18N, PROMO_I18N } from "./content-i18n";
 import { DEFAULT_BANNERS, DEFAULT_GAMES, DEFAULT_PROMOTIONS } from "./defaults";
 import { insertMany, json, q, q1, run, type SqlValue } from "./index";
@@ -21,28 +19,13 @@ export type InstallMode = "production" | "staging";
 const empty = async (table: string) => !(await q1(`SELECT 1 FROM ${table} LIMIT 1`));
 
 /**
- * What every install needs: staff roles, the lotto catalog, home banners, promotions (switched
- * off in production until the operator reviews them), the game lobby placeholders, and the
- * first owner account. Only fills tables that are empty, so it is safe to run again.
+ * What every install needs: the lotto catalog, home banners, promotions (switched off in
+ * production until the operator reviews them) and the game lobby placeholders. Only fills tables
+ * that are empty, so it is safe to run again. Staff roles and the first owner account belong to
+ * the back-office app (`npm run db -- create-owner` there).
  */
-export async function seedEssentials({
-  mode,
-  owner,
-  now = Date.now(),
-}: {
-  mode: InstallMode;
-  owner?: { username: string; password: string; name: string; mustChange?: boolean };
-  now?: number;
-}) {
+export async function seedEssentials({ mode, now = Date.now() }: { mode: InstallMode; now?: number }) {
   const created: string[] = [];
-  if (await empty("staff_roles")) {
-    await insertMany(
-      "staff_roles",
-      ["name", "description", "permissions", "is_owner", "created_at", "updated_at"],
-      DEFAULT_ROLES.map((r) => [r.name, r.description, json.str(r.permissions), r.isOwner ? 1 : 0, now, now]),
-    );
-    created.push("staff roles");
-  }
   if (await empty("lottos")) {
     await insertMany(
       "lottos",
@@ -94,16 +77,8 @@ export async function seedEssentials({
   const settings = await getSettings();
   if (!settings.install.mode) await setSetting("install", { mode, at: now }, now);
 
-  let ownerId: number | null = null;
-  if (owner && !(await q1("SELECT 1 FROM users WHERE role = 'staff' LIMIT 1"))) {
-    const role = await q1<{ id: number }>("SELECT id FROM staff_roles WHERE is_owner = 1 ORDER BY id LIMIT 1");
-    const r = await createStaff({ ...owner, roleId: role!.id }, null, { mustChange: owner.mustChange ?? true, now });
-    if (!r.ok) throw new Error(`owner account: ${r.error}`);
-    ownerId = r.id;
-    created.push(`owner account "${owner.username}"`);
-  }
   await ensureRounds(now, { daysBack: 0, daysAhead: 1 });
-  return { created, ownerId };
+  return { created };
 }
 
 /* ---------------------------------------------------------------------------------------------
@@ -124,6 +99,12 @@ const FIRST = ["อนุชา", "สุภาพร", "ณัฐพล", "ช�
 const LAST = ["บุญมา", "รุ่งเรือง", "วงศ์ใหญ่", "ทองคำ", "สุขสวัสดิ์", "เพชรงาม", "ศรีวงศ์", "แก้วมณี", "พรหมมา", "จันทร์หอม"];
 const POPULAR = new Set(["thai-gov", "hanoi", "hanoi-vip", "hanoi-special", "laos-vip", "laos-star", "nikkei-pm", "china-pm", "hangseng-pm", "thai-stock"]);
 const EXPOSURE_TARGETS = ["thai-gov", "hanoi", "hanoi-vip", "laos-vip", "laos-star", "hanoi-special", "nikkei-pm", "dowjones"];
+
+/** Three "hot" numbers per round and bet type, stable for the round so they build up exposure. */
+function hotNumbers(roundId: number, betType: BetTypeCode, digits: number): string[] {
+  const h = createHash("sha1").update(`${roundId}:${betType}`).digest();
+  return [0, 1, 2].map((i) => String(h.readUInt32BE(i * 4) % 10 ** digits).padStart(digits, "0"));
+}
 
 type SeedEvent = { at: number; order: number; run: () => Promise<unknown> };
 
@@ -154,6 +135,8 @@ export async function seedDemo({ now = Date.now(), days = 4, log = (line: string
   }
   const payoutAccount = (await q1<{ id: number }>("SELECT id FROM bank_accounts WHERE kind = 'withdraw' AND archived_at IS NULL ORDER BY sort, id LIMIT 1"))?.id ?? null;
 
+  // The actor for demo approvals: staff accounts live in the back-office app now, so this is
+  // usually null (deposits are then approved by "the system" and the demo withdrawal is skipped).
   const admin = (await q1<{ id: number }>("SELECT id FROM users WHERE role = 'staff' ORDER BY id LIMIT 1"))?.id ?? null;
   const memberHash = hashPasswordSync("demo1234");
   const insertUser = async (u: { phone: string; name: string; bank: [string, string, string]; ref: string; upline1?: number; upline2?: number; balance?: number; simulated?: boolean; created: number; hash?: string }) =>

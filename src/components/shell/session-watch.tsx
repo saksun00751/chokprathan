@@ -12,16 +12,15 @@ import { endedText } from "./session-ended";
 
 type Ended = { reason: SessionEnd; at: number | null; ip: string | null };
 
-/** Staff screens are checked more often: there are few of them and they matter more. */
-const EVERY = { member: 60_000, staff: 30_000 } as const;
+const EVERY = 60_000;
 
 /**
  * One session per account means a device can lose its session at any moment (the account signed
- * in somewhere else, a password or 2-step change, an idle staff session). This checks every minute
- * (30 s for staff) and whenever the tab comes back into view, and says what happened instead of
- * leaving a page that looks signed in but no longer works.
+ * in somewhere else, a password or status change). This checks every minute and whenever the tab
+ * comes back into view, and says what happened instead of leaving a page that looks signed in but
+ * no longer works.
  */
-export function SessionWatch({ door }: { door: "member" | "staff" }) {
+export function SessionWatch() {
   const { lang, t } = useI18n();
   const s = t.common.session;
   const router = useRouter();
@@ -35,7 +34,7 @@ export function SessionWatch({ door }: { door: "member" | "staff" }) {
       if (stopped || document.visibilityState !== "visible" || Date.now() - last < 10_000) return;
       last = Date.now();
       try {
-        const r = await fetch(`/api/session?door=${door}`, { cache: "no-store", credentials: "same-origin" });
+        const r = await fetch("/api/session", { cache: "no-store", credentials: "same-origin" });
         if (!r.ok) return;
         const body = (await r.json()) as { state: string } & Partial<Ended>;
         if (!stopped && body.state === "ended" && body.reason) setEnded({ reason: body.reason, at: body.at ?? null, ip: body.ip ?? null });
@@ -43,7 +42,7 @@ export function SessionWatch({ door }: { door: "member" | "staff" }) {
         // Offline or the server is restarting: the next check tries again.
       }
     };
-    const timer = window.setInterval(check, EVERY[door]);
+    const timer = window.setInterval(check, EVERY);
     document.addEventListener("visibilitychange", check);
     window.addEventListener("focus", check);
     return () => {
@@ -52,13 +51,13 @@ export function SessionWatch({ door }: { door: "member" | "staff" }) {
       document.removeEventListener("visibilitychange", check);
       window.removeEventListener("focus", check);
     };
-  }, [door]);
+  }, []);
 
   if (!ended) return null;
   const { title, body } = endedText(s, ended.reason);
-  const signIn = () => router.push(`${door === "staff" ? "/console" : "/login"}?next=${encodeURIComponent(pathname)}`);
-  // Members may keep browsing signed out; the back office is closed to a dead staff session.
-  const close = door === "staff" ? signIn : () => (setEnded(null), router.refresh());
+  const signIn = () => router.push(`/login?next=${encodeURIComponent(pathname)}`);
+  // Members may keep browsing signed out.
+  const close = () => (setEnded(null), router.refresh());
   return (
     <Sheet
       open
@@ -66,11 +65,9 @@ export function SessionWatch({ door }: { door: "member" | "staff" }) {
       title={title}
       footer={
         <div className="flex flex-wrap justify-end gap-2">
-          {door === "member" && (
-            <Button variant="secondary" onClick={close}>
-              {t.common.close}
-            </Button>
-          )}
+          <Button variant="secondary" onClick={close}>
+            {t.common.close}
+          </Button>
           <Button onClick={signIn}>
             <LogIn className="size-4" aria-hidden="true" />
             {s.signInAgain}

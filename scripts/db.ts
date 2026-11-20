@@ -3,16 +3,18 @@
  *
  *   status                         schema version, install mode, row counts
  *   migrate                        apply pending migrations
- *   setup --mode production|staging --owner <username> [--name "..."] [--password "..."]
- *                                  migrate, add essentials, create the first owner account
+ *   setup --mode production|staging
+ *                                  migrate and add essentials (lotto catalog, banners, promotions, games)
  *   seed-demo                      add demo members and history (staging installs only)
  *   reset --yes                    drop every app table (refused on production installs)
  *   media-to-mongo                 move uploaded images from MariaDB into MongoDB GridFS
  *   stats-rebuild                  rebuild every dashboard/report summary in MongoDB from MariaDB
  *
+ * Staff accounts (the first owner included) are created in the back-office app:
+ *   cd ../chokprathan-admin && npm run db -- create-owner --username U --password P
+ *
  * Reads DATABASE_URL from the environment (.env.local is loaded by the npm script).
  */
-import { randomBytes } from "node:crypto";
 import { closePool, q, q1 } from "@/server/db";
 import { dropAppTables, installMode, migrate, schemaVersion } from "@/server/db/migrate";
 import { seedDemo, seedEssentials, type InstallMode } from "@/server/db/seed";
@@ -31,15 +33,6 @@ const opt = (name: string) => {
 const flag = (name: string) => args.includes(`--${name}`);
 const log = (line: string) => console.log(line);
 
-function strongPassword(): string {
-  // 18 chars from an unambiguous alphabet, always with letters and digits.
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  const bytes = randomBytes(18);
-  let out = "";
-  for (const b of bytes) out += alphabet[b % alphabet.length];
-  return /\d/.test(out) && /[a-zA-Z]/.test(out) ? out : strongPassword();
-}
-
 async function main() {
   setCacheEnabled(false);
   switch (cmd) {
@@ -52,8 +45,6 @@ async function main() {
           const r = await q1<{ n: number }>(`SELECT COUNT(*) AS n FROM ${t}`);
           log(`  ${t.padEnd(14)} ${r?.n ?? 0}`);
         }
-        const staff = await q1<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE role = 'staff'");
-        log(`  staff          ${staff?.n ?? 0}`);
       }
       break;
     }
@@ -65,23 +56,12 @@ async function main() {
     case "setup": {
       const mode = opt("mode") as InstallMode | undefined;
       if (mode !== "production" && mode !== "staging") throw new Error("--mode production|staging is required");
-      const username = opt("owner");
       await migrate(log);
       const existingMode = await installMode();
       if (existingMode && existingMode !== mode) throw new Error(`this database is already a ${existingMode} install`);
-      const password = opt("password") ?? (username ? strongPassword() : undefined);
-      const r = await seedEssentials({
-        mode,
-        owner: username && password ? { username, password, name: opt("name") ?? "เจ้าของระบบ", mustChange: !flag("keep-password") } : undefined,
-      });
+      const r = await seedEssentials({ mode });
       log(r.created.length ? `created: ${r.created.join(", ")}` : "essentials already present");
-      if (r.ownerId && !opt("password")) {
-        log("");
-        log("  Owner account (shown once, change it at first sign-in):");
-        log(`    username: ${username}`);
-        log(`    password: ${password}`);
-        log("");
-      }
+      log("next: create the first owner account in the back-office app (npm run db -- create-owner there)");
       break;
     }
     case "seed-demo": {
