@@ -381,6 +381,8 @@ async function legacy() {
 }
 
 describe.skipIf(!hasTestDb)("importStaff", () => {
+  // NOTE: if the test database already holds the member schema, `legacy()` must drop/create users and staff_roles on a pinned
+  // connection with FOREIGN_KEY_CHECKS = 0 (see the committed test in chokprathan-admin).
   beforeEach(async () => {
     await resetDb();
     await legacy();
@@ -440,7 +442,7 @@ export async function importStaff({ refresh = false }: { refresh?: boolean } = {
     await run(
       `INSERT INTO employee_roles (id, name, description, permissions, is_owner, created_at, updated_at)
        SELECT id, name, description, permissions, is_owner, created_at, updated_at FROM staff_roles
-       ${refresh ? `ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), permissions = VALUES(permissions), is_owner = VALUES(is_owner), updated_at = VALUES(updated_at)` : `ON DUPLICATE KEY UPDATE id = id`}`,
+       ${refresh ? `ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description), permissions = VALUES(permissions), is_owner = VALUES(is_owner), updated_at = VALUES(updated_at)` : `ON DUPLICATE KEY UPDATE employee_roles.id = employee_roles.id`}`,
     );
     await run(
       `INSERT INTO employees (id, username, password_hash, name, status, employee_role_id, totp_secret, totp_enabled, totp_last_step,
@@ -452,7 +454,7 @@ export async function importStaff({ refresh = false }: { refresh?: boolean } = {
            ? `ON DUPLICATE KEY UPDATE username = VALUES(username), password_hash = VALUES(password_hash), name = VALUES(name), status = VALUES(status),
               employee_role_id = VALUES(employee_role_id), totp_secret = VALUES(totp_secret), totp_enabled = VALUES(totp_enabled),
               totp_last_step = VALUES(totp_last_step), must_change_password = VALUES(must_change_password), note = VALUES(note)`
-           : `ON DUPLICATE KEY UPDATE id = id`
+           : `ON DUPLICATE KEY UPDATE employees.id = employees.id`
        }`,
     );
     const count = async (table: string) => (await q1<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`))?.n ?? 0;
