@@ -2,7 +2,7 @@
  * TTLs (ms) for memo() keys that the back office writes. invalidate() clears only the process
  * that calls it, so once the back office runs as its own app a change reaches this site only when
  * the key expires here. Why each value is what it is: docs/cache-ttl-audit.md.
- * memo() serves a stale value once and refreshes in the background, so hot keys stay cheap.
+ * memo() serves a stale value (below 2x the TTL) and refreshes in the background, so hot keys stay cheap.
  */
 
 /** Settings: rates, risk, bet limits, wallet limits, registration, cancel window. Bet acceptance reads them. */

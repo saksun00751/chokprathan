@@ -48,7 +48,7 @@ There is no separate maintenance-mode flag; site switches (`registrationOpen`, `
 
 | key / prefix | where memoized | TTL | admin write that changes it | member-visible effect if stale | decision | reason |
 |---|---|---|---|---|---|---|
-| `settings` | `services/settings.ts:48` | 5 s (`SETTINGS_TTL_MS`) | rates, risk, bet limits, wallet limits, site switches (registration, OTP, cancel window, announcement), rewards, points, activities | **Correctness**: `placeBill` (`bills.ts:232, 267`) and bill cancel (`bills.ts:387`) read rates/limits/cancel window from it; wallet limits; registration open/closed | keep 5 s | Already at the 5 s cap. Read on nearly every page and every bet, so lower would multiply DB load; memo's stale-while-revalidate keeps it cheap. |
+| `settings` | `services/settings.ts:48` | 5 s (`SETTINGS_TTL_MS`) | rates, risk, bet limits, wallet limits, site switches (registration, OTP, cancel window, announcement), rewards, points, activities | **Correctness**: `placeBill` (`bills.ts:232, 267`) and bill cancel (`bills.ts:387`) read rates/limits/cancel window from it; wallet limits; registration open/closed | keep 5 s | Already at the 5 s cap. Read on nearly every page and every bet, so lower would multiply DB load; memo's bounded stale-while-revalidate keeps it cheap (worst case 10 s, see below). |
 | `lottos` | `services/lottos.ts:73` | 5 s (`LOTTOS_TTL_MS`) | `saveLottoAction` (enable/disable, per-lotto rates/limits/risk, schedule) | **Correctness**: bet acceptance reads the lotto (`bills.ts:231, 271`) for rates and limits; a disabled lotto stays listed | keep 5 s | At the cap; hot (every page). Named the inline literal. |
 | `lobby` | `data/lobby.ts:74` | 4 s (`LOBBY_TTL_MS`) | settings, lottos, manual limits, cancel round, results | Open rounds / cut counts shown on the home lobby; a cancelled round may stay listed up to ~4 s. Bet itself is re-checked in the DB | keep 4 s | Under the cap; hottest key. Named the inline literal. |
 | `limits:<roundId>` | `services/risk.ts:99` | 3 s (`ROUND_LIMITS_TTL_MS`) | manual limits, risk/limits settings, lottos, results/cancel | Rate-cut and closed-number badges on the bet page. Bet acceptance reads `manual_limits`/`exposures` directly | keep 3 s | Under the cap. Named the inline literal. |
@@ -64,19 +64,48 @@ There is no separate maintenance-mode flag; site switches (`registrationOpen`, `
 | Next `use cache` tag `theme` | `theme.ts:15` (`cacheLife`) | 60 s -> **30 s** (`THEME_CACHE_S`) | `saveThemeAction` (`updateTag("theme")` is process-local too) | Old colour theme up to 30 s | lower to 30 s | Cosmetic cap. 30 s is also Next's floor for `stale` (below it the scope drops out of prefetching). |
 | `proxy:<tokenHash>` | `proxy-auth.ts:18` | 5 s (inline) | none directly (reads `sessions`/`users`); revoking sessions changes the answer | Staff gate for `/admin` and the "session ended" note on `/login` | keep 5 s | Already 5 s. After the Switch member stops serving `/admin` (Task 14). Member pages check the session in the DB directly. |
 
-## Stale-while-revalidate caveat (follow-up, not changed here)
+## Bounded staleness (`STALE_BOUND_FACTOR`)
 
-`memo` answers a stale entry at once and refreshes in the background. On a hot key the delay is
-about one TTL. On a key nobody read for a while, the **first** reader after the idle gets the old
-value (any age; idle entries are only swept when the cache holds more than 5000 keys), and only the
-next reader sees the fresh one. Nested keys add up: `lobby` is built from `lottos` and `settings`,
-which may themselves be served stale during that refresh, so the lobby's worst case is about
-4 s + 5 s on a busy site.
+`memo` answers a stale entry at once and refreshes in the background (stale-while-revalidate), but
+only while the entry is younger than `STALE_BOUND_FACTOR` (2) x its TTL (`src/server/cache.ts`).
+Older than that, the caller waits for a fresh load; concurrent callers share that one load; if the
+load fails the caller gets the error, as on a cold miss. Inside a transaction an expired entry is
+still read on the transaction's own connection, uncached; with caching disabled (tests) every read
+loads. `invalidate()` is unchanged. Tests: `src/server/cache.test.ts`.
 
-For `settings` and `lottos` this matters: a quiet member process could accept the first bet after an
-admin rate change at the old rate. Today this is masked because the admin runs in the same process
-and its `invalidate()` clears the entry. Recommended follow-up (a change to `memo`, out of scope for
-this constants-only task): block on a fresh load when the entry is older than, say, 2x its TTL,
-instead of serving it stale.
+Before this fix a key nobody had read for a while handed its first reader a value of any age (idle
+entries are only swept when the cache holds more than 5000 keys): a quiet member process could have
+accepted the first bet after an admin rate change at the old rate. Today that was hidden because the
+admin runs in the same process and its `invalidate()` clears the entry; after the split it would not be.
+
+### Worst-case staleness after an admin write (member process, no local invalidate)
+
+"Busy" = read continuously, so a refresh starts as soon as the TTL passes: about one TTL (plus one
+load). "Bound" = the hard ceiling from `STALE_BOUND_FACTOR`: 2 x TTL (plus one load). A key built
+from other memo keys (nested) can add their staleness on top, because its load may itself be
+answered a stale inner value.
+
+| key | TTL | own: busy / bound | nested inside the load | data age, worst case (bound) | who relies on it |
+|---|---|---|---|---|---|
+| `settings` | 5 s | ~5 s / 10 s | - | 10 s | bet acceptance (rates, limits, cancel window), wallet limits, registration |
+| `lottos` | 5 s | ~5 s / 10 s | - | 10 s | bet acceptance (lotto rates/limits, enabled) |
+| `lobby` | 4 s | ~4 s / 8 s | `lottos`, `settings` (via `listLottos`, `getSettings`, `limitsForRounds`) | rounds 8 s; lotto/settings fields up to 8 + 10 = 18 s (busy: ~9 s) | home lobby display; bets re-checked in DB |
+| `limits:<round>` | 3 s | ~3 s / 6 s | `settings`, `lottos` (in `limitsForRounds`) | 6 + 10 = 16 s (busy: ~8 s) | rate-cut badges (display); bets read `manual_limits`/`exposures` directly |
+| `banners:active` | 10 s | ~10 s / 20 s | - | 20 s | display |
+| `content:promotions`, `content:news` | 15 s | ~15 s / 30 s | - | 30 s | display |
+| `games:products`, `games:catalog:<id>` | 30 s | ~30 s / 60 s | - | 60 s | display; launch re-checks DB |
+| `results:latest` | 10 s | ~10 s / 20 s | `lottos` | 20 + 10 = 30 s | display |
+| `results:yiki` | 10 s | ~10 s / 20 s | - | 20 s | display |
+| `results:history:<id>` | 15 s | ~15 s / 30 s | - | 30 s | display |
+| `proxy:<tokenHash>` | 5 s | ~5 s / 10 s | - | 10 s | staff `/admin` gate, "session ended" note |
+| `content:games` | 60 s | ~60 s / 120 s | - | 120 s | display; admin never writes it |
+
+Bet acceptance reads `settings` and `lottos` directly (not through `lobby`), so its worst case is
+10 s, about 5 s on a busy site. If a hard 5 s ceiling is wanted for those two, set their TTLs to
+2_500 ms (twice the queries) rather than changing the factor.
+
+The theme is not a `memo` key: Next `use cache` with `cacheLife({ stale: 30, revalidate: 30,
+expire: 86_400 })` also serves a stale entry while it regenerates, up to `expire`. A process idle for
+hours can show the first visitor an old theme once. Cosmetic; left as is.
 
 No cross-app invalidation was added (spec §3: only if short TTLs are not enough).
