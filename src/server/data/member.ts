@@ -2,6 +2,7 @@ import "server-only";
 import { io } from "next/cache";
 import { getI18n } from "@/i18n/rsc";
 import { memo } from "@/server/cache";
+import { CONTENT_TTL_MS } from "@/server/cache-ttl";
 import { json, q } from "@/server/db";
 import { affiliateSummary, cashbackSummary, downlines } from "@/server/services/retention";
 import { getSettings } from "@/server/services/settings";
@@ -48,7 +49,7 @@ function localize<T extends Record<string, unknown>, K extends keyof T & string>
 export async function getPromotions() {
   const { lang } = await getI18n();
   await io();
-  const rows = await memo("content:promotions", 15_000, () =>
+  const rows = await memo("content:promotions", CONTENT_TTL_MS, () =>
     q<{ id: number; title: string; summary: string; details: string; bonus_percent: number; max_bonus: number; min_deposit: number; turnover_x: number; i18n: string | null }>(
       "SELECT id, title, summary, details, bonus_percent, max_bonus, min_deposit, turnover_x, i18n FROM promotions WHERE active = 1 ORDER BY sort, id",
     ),
@@ -73,7 +74,7 @@ export async function getNumberSets(userId: number): Promise<SavedSet[]> {
 export async function getNews(limit = 10) {
   const { lang } = await getI18n();
   await io();
-  const rows = await memo("content:news", 15_000, () =>
+  const rows = await memo("content:news", CONTENT_TTL_MS, () =>
     q<{ id: number; title: string; body: string; pinned: number; created_at: number; i18n: string | null }>(
       "SELECT id, title, body, pinned, created_at, i18n FROM news WHERE published = 1 ORDER BY pinned DESC, created_at DESC LIMIT 50",
     ),

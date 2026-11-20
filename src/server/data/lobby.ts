@@ -6,6 +6,7 @@ import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import type { Locale } from "@/i18n/config";
 import { memo } from "@/server/cache";
+import { LOBBY_TTL_MS, RESULTS_TTL_MS } from "@/server/cache-ttl";
 import { q } from "@/server/db";
 import { betConfigs, listLottos, type Lotto } from "@/server/services/lottos";
 import { limitsForRounds } from "@/server/services/risk";
@@ -70,7 +71,7 @@ export interface LobbyData {
 type Picked = { round: Round; lotto: Lotto; yiki: boolean; cuts: number };
 
 function lobbySnapshot(): Promise<{ builtAt: number; picked: Picked[]; settings: AllSettings }> {
-  return memo("lobby", 4_000, async () => {
+  return memo("lobby", LOBBY_TTL_MS, async () => {
     const now = Date.now();
     const [lottos, settings] = await Promise.all([listLottos(), getSettings()]);
     const byId = new Map(lottos.map((l) => [l.id, l]));
@@ -135,7 +136,7 @@ export interface LatestResult {
 export async function getLatestResults(limit = 40): Promise<{ serverNow: number; results: LatestResult[] }> {
   const { lang, t } = await getI18n();
   await io();
-  const raw = await memo("results:latest", 10_000, async () => {
+  const raw = await memo("results:latest", RESULTS_TTL_MS, async () => {
     const lottos = await listLottos();
     const byId = new Map(lottos.map((l) => [l.id, l]));
     const rows = await q<RoundRow>(

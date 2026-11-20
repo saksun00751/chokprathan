@@ -4,6 +4,7 @@ import { isGameGroup, productName, type GameGroup } from "@/domain/game-products
 import type { Locale } from "@/i18n/config";
 import { getI18n } from "@/i18n/rsc";
 import { memo } from "@/server/cache";
+import { GAME_CATALOG_TTL_MS, GAME_PRODUCTS_TTL_MS } from "@/server/cache-ttl";
 import { json, q, tolerateMissingTable } from "@/server/db";
 import { getViewer } from "@/server/session";
 
@@ -27,7 +28,7 @@ const localName = (names: string | null, fallback: string, lang: Locale) => {
 
 /** Products members can play: switched on, offered by the aggregator, and with games. Cached briefly. */
 const playable = () =>
-  memo("games:products", 60_000, () =>
+  memo("games:products", GAME_PRODUCTS_TTL_MS, () =>
     tolerateMissingTable(
       () =>
         q<{ product_id: string; name: string; grp: string; games: number }>(
@@ -52,7 +53,7 @@ export async function getGameLobby({ group, product }: { group?: string; product
   const selected = product ? (all.find((p) => p.id === product) ?? null) : null;
   const games: LobbyGame[] = selected
     ? (
-        await memo(`games:catalog:${selected.id}`, 60_000, () =>
+        await memo(`games:catalog:${selected.id}`, GAME_CATALOG_TTL_MS, () =>
           q<{ code: string; name: string; names: string | null; img: string | null }>(
             "SELECT code, name, names, img FROM game_catalog WHERE product_id = ? ORDER BY rank_no, id LIMIT 1000",
             selected.id,

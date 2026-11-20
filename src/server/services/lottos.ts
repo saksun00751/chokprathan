@@ -2,6 +2,7 @@ import "server-only";
 import { BET_TYPES, betTypesFor } from "@/domain/betTypes";
 import type { BetTypeCode, LottoGroup, ResultFormat, RiskProfile, Schedule } from "@/domain/types";
 import { invalidate, memo } from "@/server/cache";
+import { LOTTOS_TTL_MS } from "@/server/cache-ttl";
 import { afterCommit, json, q } from "@/server/db";
 import { getSettings, type AllSettings } from "./settings";
 
@@ -69,7 +70,7 @@ function toLotto(r: LottoRow): Lotto {
 
 /** The whole catalog, cached briefly: it is small, read on every page, and changes rarely. */
 function allLottos(): Promise<Lotto[]> {
-  return memo("lottos", 5_000, async () => (await q<LottoRow>("SELECT * FROM lottos ORDER BY sort, id")).map(toLotto));
+  return memo("lottos", LOTTOS_TTL_MS, async () => (await q<LottoRow>("SELECT * FROM lottos ORDER BY sort, id")).map(toLotto));
 }
 
 export function invalidateLottos() {

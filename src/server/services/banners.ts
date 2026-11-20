@@ -3,6 +3,7 @@ import { errorsT } from "@/i18n/server";
 import { ART_KEYS, type ArtKey } from "@/components/art/keys";
 import { safeHref } from "@/domain/banner";
 import { invalidate, memo } from "@/server/cache";
+import { BANNERS_TTL_MS } from "@/server/cache-ttl";
 import { afterCommit, json, q, q1, run, tx } from "@/server/db";
 import type { BannerText } from "@/server/db/content-i18n";
 import { removeImage } from "@/server/uploads";
@@ -66,7 +67,7 @@ const changed = () => {
 };
 
 export async function listBanners({ activeOnly = false } = {}): Promise<Banner[]> {
-  if (activeOnly) return memo("banners:active", 10_000, async () => (await q<Row>("SELECT * FROM banners WHERE active = 1 ORDER BY sort, id")).map(toBanner));
+  if (activeOnly) return memo("banners:active", BANNERS_TTL_MS, async () => (await q<Row>("SELECT * FROM banners WHERE active = 1 ORDER BY sort, id")).map(toBanner));
   return (await q<Row>("SELECT * FROM banners ORDER BY sort, id")).map(toBanner);
 }
 

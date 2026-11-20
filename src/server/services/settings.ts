@@ -3,6 +3,7 @@ import { DEFAULT_ACTIVITIES } from "@/domain/activities";
 import { DEFAULT_POINT_RULE } from "@/domain/points";
 import { DEFAULT_THEME, type ThemeId } from "@/domain/themes";
 import { invalidate, memo } from "@/server/cache";
+import { SETTINGS_TTL_MS } from "@/server/cache-ttl";
 import { afterCommit, json, q, run } from "@/server/db";
 import {
   DEFAULT_LIMITS,
@@ -42,11 +43,9 @@ function merge<T>(base: T, override: unknown): T {
   return out as T;
 }
 
-const TTL = 5_000;
-
 /** Every setting, stored values merged over the defaults so new fields always have a value. */
 export function getSettings(): Promise<AllSettings> {
-  return memo("settings", TTL, async () => {
+  return memo("settings", SETTINGS_TTL_MS, async () => {
     const rows = await q<{ key: string; value: string }>("SELECT `key`, `value` FROM settings");
     const stored = new Map(rows.map((r) => [r.key, json.parse<unknown>(r.value, undefined)]));
     const out = {} as Record<string, unknown>;

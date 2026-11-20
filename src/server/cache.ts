@@ -4,10 +4,19 @@ import { inTx, outsideTx } from "@/server/db";
 /**
  * Tiny in-process cache for hot, shared reads (settings, lotto catalog, lobby, cut rates).
  * Concurrent callers share one in-flight load, so a burst of traffic costs one query.
- * Writers call invalidate() in this process; other instances catch up within the TTL.
+ * Writers call invalidate() in this process; other processes catch up within the TTL on a busy key,
+ * and never later than STALE_BOUND_FACTOR x the TTL (plus one load).
  */
 type Entry = { value?: unknown; at: number; gen: number; inflight?: Promise<unknown> };
 const entries = ((globalThis as unknown as { __chokprathanCache?: Map<string, Entry> }).__chokprathanCache ??= new Map());
+
+/**
+ * How stale a value may still be answered at once: below STALE_BOUND_FACTOR x ttl the caller gets
+ * the old value and a background refresh starts; past it the caller waits for a fresh load (shared
+ * with any other caller) and sees its error if it fails, as on a cold miss. Without the bound a key
+ * nobody read for an hour would hand its first reader an hour-old value. docs/cache-ttl-audit.md
+ */
+export const STALE_BOUND_FACTOR = 2;
 
 let disabled = false;
 /** Tests turn caching off so every read sees the latest write. */
@@ -23,8 +32,8 @@ export async function memo<T>(key: string, ttlMs: number, load: () => Promise<T>
   const now = Date.now();
   let e = entries.get(key);
   if (e && "value" in e && now - e.at < ttlMs) return e.value as T;
-  if (e && "value" in e) {
-    // Stale: answer at once and refresh in the background (stale-while-revalidate).
+  if (e && "value" in e && now - e.at < ttlMs * STALE_BOUND_FACTOR) {
+    // Stale but within the bound: answer at once and refresh in the background (stale-while-revalidate).
     if (!e.inflight) void refresh(e, load).catch(() => {});
     return e.value as T;
   }
