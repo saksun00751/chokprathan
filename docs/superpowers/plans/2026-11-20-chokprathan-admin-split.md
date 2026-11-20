@@ -1453,3 +1453,18 @@ Each `invalidate(...)` called from an admin-triggered write matches a `memo` key
 - [ ] **Step 3: Run** `npm test`; **commit** — `git add -A && git commit -m "perf(cache): short TTL for keys the back office writes"`.
 
 (Do Task 17 before Task 13 step 4; it is listed last only so numbering above stays stable.)
+
+---
+
+## Plan amendments found during execution (2026-11-21)
+
+Phase A (Tasks 1–12), Task 17 and Tasks 13/16 were executed in `chokprathan-admin`; these facts changed the plan:
+
+1. **Task 15 (migration 9) must NOT run until the admin repo is changed first.** Admin code still filters `users.role = 'member'` in ~20 places (`actions/admin.ts`, `data/admin.ts`, `data/dashboard.ts`, `stats/build.ts`, `services/members.ts`, `services/blocklist.ts`) and uses `users.staff_note` as the *member note* (`actions/admin.ts` `UPDATE users SET staff_note`). Required before migration 9: (a) an admin task that removes every `role = 'member'` filter (after the contract step all rows are members; keep the filter until then), (b) decide the fate of `staff_note`: it is member data in practice, so migration 9 should **keep** it (drop only `role`, `staff_role_id`, `totp_*`, `must_change_password`, and the FK/index), or rename it to `member_note` in both apps, (c) update `scripts/grants.sql` (`UPDATE (…, staff_note)`) to match. `importStaff` reads the legacy columns and is a no-op once they are gone (already guarded).
+2. **`memo` staleness (member, Task 17 follow-up, branch `admin-split/prep`, commit 3876161).** `memo` used to serve a stale value of any age; after the split the admin cannot invalidate the member process, so a quiet process could accept the first bet at an old rate. Fixed: stale values are served only up to 2x TTL. Worst case for `settings`/`lottos` (bet-relevant) is ~10 s (~5 s on a busy site); a hard 5 s ceiling would need 2.5 s TTLs (double the queries).
+3. **Member DDL.** `chok_member` has no DDL rights. The member app must run with `DB_AUTO_MIGRATE=false` and migrations run with a separate privileged user (runbook step 0a). `grants.sql` must be applied after the member migrations.
+4. **Employee ids vs member ids.** `employees.id` keeps old staff ids, so new employees would reuse ids that exist in `users`. Optional runbook step 2.5 sets `ALTER TABLE employees AUTO_INCREMENT = 1000000000` (fits INT). Decide before Switch.
+5. **Maintenance mode** does not exist in the member app; the runbook uses an nginx 503 switch.
+6. **Parity script** (`scripts/check-parity.sh`) passes only after branch `admin-split/prep` is merged into member `main`.
+7. **Counts/names:** the back office has 24 pages (not 26); login action names are `loginAction`/`logoutAction`; AMB secrets are not given to admin (games page lost its API/callback card and sync button).
+8. **Test database:** the available test DB already contained the member schema (and a production install flag); the Task 4 test needs FK checks off in its fixture. Member-table service tests (rounds, finance, settlement, blocklist, points) have NOT been run in the admin repo; they need an empty disposable database with the member schema.
