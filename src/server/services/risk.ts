@@ -2,6 +2,7 @@ import "server-only";
 import { marginalRate100 } from "@/domain/pricing";
 import type { BetTypeCode, ManualLimit } from "@/domain/types";
 import { invalidate, memo } from "@/server/cache";
+import { ROUND_LIMITS_TTL_MS } from "@/server/cache-ttl";
 import { afterCommit, q, q1, run } from "@/server/db";
 import { audit } from "./audit";
 import { betConfigs, getLotto, listLottos, type BetConfig } from "./lottos";
@@ -95,7 +96,7 @@ export async function limitsForRounds(roundIds: number[]): Promise<Map<number, L
 
 /** Every number whose next baht would be paid below the base rate, or not accepted at all. Cached briefly. */
 export function roundLimits(roundId: number): Promise<LimitBadge[]> {
-  return memo(`limits:${roundId}`, 3_000, async () => (await limitsForRounds([roundId])).get(roundId) ?? []);
+  return memo(`limits:${roundId}`, ROUND_LIMITS_TTL_MS, async () => (await limitsForRounds([roundId])).get(roundId) ?? []);
 }
 
 export async function setManualLimit(

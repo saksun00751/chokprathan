@@ -5,6 +5,7 @@ import type { BetTypeCode, RiskProfile } from "@/domain/types";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { memo } from "@/server/cache";
+import { RESULTS_HISTORY_TTL_MS, RESULTS_TTL_MS } from "@/server/cache-ttl";
 import { q } from "@/server/db";
 import { betConfigs, getLottoBySlug, listLottos } from "@/server/services/lottos";
 import { toRound, type RoundRow } from "@/server/services/rounds";
@@ -13,7 +14,7 @@ import { getSettings } from "@/server/services/settings";
 export async function getYikiRecent(limit = 12) {
   const { lang, t } = await getI18n();
   await io();
-  const rows = await memo("results:yiki", 10_000, () =>
+  const rows = await memo("results:yiki", RESULTS_TTL_MS, () =>
     q<RoundRow>(
       `SELECT r.* FROM rounds r JOIN lottos l ON l.id = r.lotto_id
        WHERE l.slug = 'yiki' AND r.status = 'resulted' ORDER BY r.closes_at DESC LIMIT 40`,
@@ -30,7 +31,7 @@ export async function getLottoHistory(slug: string, limit = 30) {
   await io();
   const lotto = await getLottoBySlug(slug);
   if (!lotto || !lotto.enabled) return null;
-  const rows = await memo(`results:history:${lotto.id}`, 15_000, () =>
+  const rows = await memo(`results:history:${lotto.id}`, RESULTS_HISTORY_TTL_MS, () =>
     q<RoundRow>("SELECT * FROM rounds WHERE lotto_id = ? AND status = 'resulted' ORDER BY closes_at DESC LIMIT 60", lotto.id),
   );
   const rounds = rows.slice(0, limit).map((row) => {
