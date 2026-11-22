@@ -44,7 +44,7 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   reactCompiler: true,
   poweredByHeader: false,
-  // A self-contained server bundle for Docker / PM2 (see DEPLOY.md).
+  // A self-contained server bundle for PM2 (see DEPLOY.md).
   output: "standalone",
   experimental: {
     serverActions: {
