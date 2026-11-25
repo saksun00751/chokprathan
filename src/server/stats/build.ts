@@ -72,7 +72,7 @@ export async function buildSpan(from: number, to: number, now = Date.now()): Pro
       ),
       q<{ dk: number; user_id: number; s: number | null }>(
         `SELECT ${DK("created_at")} AS dk, user_id, SUM(amount) AS s
-         FROM transactions WHERE created_at >= ? AND created_at < ? AND type = 'aff_earn' GROUP BY dk, user_id`,
+         FROM transactions WHERE created_at >= ? AND created_at < ? AND type IN ('aff_earn','aff_correction') GROUP BY dk, user_id`,
         ...span,
       ),
       q<{ hk: number; user_id: number; n: number; s: number | null }>(
