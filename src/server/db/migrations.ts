@@ -820,6 +820,20 @@ export const MIGRATIONS: Migration[] = [
       ) ${T}`,
     ],
   },
+  {
+    version: 13,
+    name: "bills priced from round configs",
+    // total_stake stays what the member paid; discount is the difference to the stake bet.
+    statements: [
+      `ALTER TABLE bills
+        ADD COLUMN IF NOT EXISTS discount BIGINT NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS package_id INT NULL,
+        ADD COLUMN IF NOT EXISTS config_version INT NULL,
+        ADD COLUMN IF NOT EXISTS request_id VARCHAR(40) NULL`,
+      "ALTER TABLE bills ADD UNIQUE KEY IF NOT EXISTS bills_request (user_id, request_id)",
+      "ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS discount BIGINT NOT NULL DEFAULT 0",
+    ],
+  },
 ];
 
 /** A MariaDB string literal (only for the fixed, trusted text above). */
