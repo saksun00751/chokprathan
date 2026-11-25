@@ -142,7 +142,8 @@ export async function getMyBill(userId: number, billId: number): Promise<BillDet
       now + 60_000,
     ),
   ]);
-  const windowEnd = Math.min(b.created_at + settings.site.cancelWindowMin * 60_000, round.closesAt);
+  const { cancelWindowMin, cancelCutoffMin } = settings.site;
+  const windowEnd = Math.min(b.created_at + cancelWindowMin * 60_000, round.closesAt - cancelCutoffMin * 60_000);
   const cancelUntil = b.status === "pending" && phaseOf(round, now) === "open" && now < windowEnd ? windowEnd : null;
   return {
     serverNow: now,

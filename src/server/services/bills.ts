@@ -4,40 +4,38 @@ import { fmt, formatNumber } from "@/i18n/format";
 import { serverI18n } from "@/i18n/server";
 import { createHash, randomInt } from "node:crypto";
 import { BET_TYPES, isValidNumber } from "chokprathan-core/rules/betTypes";
-import { averageRate100, formatBaht, payoutOf } from "chokprathan-core/rules/money";
-import { priceStake } from "chokprathan-core/rules/pricing";
-import type { BetTypeCode, ManualLimit, Segment } from "chokprathan-core/rules/types";
+import { formatBaht } from "chokprathan-core/rules/money";
+import { priceSlip, slipKey, type PricedLine, type LineReason, type SlipLine } from "chokprathan-core/rules/quote";
+import type { RoundConfig } from "chokprathan-core/rules/roundConfig";
+import type { BetTypeCode, ManualLimit } from "chokprathan-core/rules/types";
 import { invalidate } from "@/server/cache";
 import { afterCommit, insertMany, json, q, q1, run, tx, type SqlValue } from "@/server/db";
-import { betConfigs, billLimits, getLotto, type Lotto } from "./lottos";
+import { getLotto } from "./lottos";
+import { getRoundConfig } from "./round-config";
 import { phaseOf, roundLabel, toRound, type Round, type RoundRow } from "./rounds";
-import { getSettings, type AllSettings } from "./settings";
+import { getSettings } from "./settings";
 import { move } from "./wallet";
 
 export { settlePending as settleRound } from "./settlement";
 
-export interface SlipLine {
-  betType: BetTypeCode;
-  number: string;
-  /** whole baht */
-  stake: number;
-}
+export type { SlipLine };
+export type LineRejectReason = LineReason;
 
-export type LineRejectReason = "unavailable" | "invalid" | "min" | "max" | "closed" | "cap";
+export type LineQuote = Extract<PricedLine, { ok: true }> | (Extract<PricedLine, { ok: false }> & { message: string });
 
-type LineBase = { betType: BetTypeCode; number: string; stake: number; baseRate100: number };
-export type LineQuote =
-  | (LineBase & { ok: true; segments: Segment[]; rate100: number; potential: number; reduced: boolean })
-  | (LineBase & { ok: false; reason: LineRejectReason; remaining?: number; message: string });
-
-export type QuoteError = "round_not_found" | "round_closed" | "round_not_open" | "empty" | "too_many_lines" | "over_bill_limit";
+export type QuoteError = "round_not_found" | "round_closed" | "round_not_open" | "bad_package" | "empty" | "too_many_lines" | "over_bill_limit";
 
 export interface Quote {
   roundId: number;
   ok: boolean;
+  packageId: number;
   lines: LineQuote[];
-  /** whole baht */
+  /** whole baht, before discount */
   totalStake: number;
+  /** satang */
+  totalDiscount: number;
+  /** satang the member pays */
+  totalNet: number;
   fingerprint: string;
   error?: QuoteError;
   message?: string;
@@ -45,10 +43,8 @@ export interface Quote {
 
 export type PlaceError = "round_closed" | "invalid" | "rate_changed" | "insufficient_balance" | "suspended";
 export type PlaceResult =
-  | { ok: true; billId: number; code: string; balance: number; quote: Quote }
+  | { ok: true; billId: number; code: string; balance: number; paid: number; quote?: Quote }
   | { ok: false; error: PlaceError; message: string; quote?: Quote };
-
-const keyOf = (betType: string, number: string) => `${betType}:${number}`;
 
 export async function manualLimitsMap(roundId: number): Promise<Map<string, ManualLimit>> {
   const rows = await q<{ bet_type: string; number: string; kind: "percent" | "closed"; percent: number | null }>(
@@ -57,7 +53,7 @@ export async function manualLimitsMap(roundId: number): Promise<Map<string, Manu
   );
   return new Map(
     rows.map((r) => [
-      keyOf(r.bet_type, r.number),
+      slipKey(r.bet_type, r.number),
       r.kind === "closed" ? { kind: "closed" } : { kind: "percent", percent: r.percent ?? 100 },
     ]),
   );
@@ -67,10 +63,24 @@ export async function manualLimitsMap(roundId: number): Promise<Map<string, Manu
 function priceableKeys(lines: SlipLine[]): { betType: BetTypeCode; number: string }[] {
   const seen = new Map<string, { betType: BetTypeCode; number: string }>();
   for (const l of lines) {
-    if (BET_TYPES[l.betType] && isValidNumber(l.betType, l.number)) seen.set(keyOf(l.betType, l.number), { betType: l.betType, number: l.number });
+    if (BET_TYPES[l.betType] && isValidNumber(l.betType, l.number)) seen.set(slipKey(l.betType, l.number), { betType: l.betType, number: l.number });
   }
   // A fixed order: two bills locking the same numbers always take the locks in the same sequence.
   return [...seen.values()].sort((a, b) => a.betType.localeCompare(b.betType) || a.number.localeCompare(b.number));
+}
+
+/** Baht this member already holds, per number, in pending bills of the round. */
+async function heldStakes(userId: number, roundId: number, keys: { number: string }[]): Promise<Map<string, number>> {
+  if (keys.length === 0) return new Map();
+  const rows = await q<{ bet_type: string; number: string; s: number | string }>(
+    `SELECT i.bet_type, i.number, SUM(i.stake) AS s FROM bills b JOIN bill_items i ON i.bill_id = b.id
+     WHERE b.user_id = ? AND b.round_id = ? AND b.status = 'pending' AND i.number IN (?)
+     GROUP BY i.bet_type, i.number`,
+    userId,
+    roundId,
+    [...new Set(keys.map((k) => k.number))],
+  );
+  return new Map(rows.map((r) => [slipKey(r.bet_type, r.number), Number(r.s)]));
 }
 
 async function exposureTotals(roundId: number, keys: { betType: BetTypeCode; number: string }[]): Promise<Map<string, number>> {
@@ -81,7 +91,7 @@ async function exposureTotals(roundId: number, keys: { betType: BetTypeCode; num
     [...new Set(keys.map((k) => k.betType))],
     [...new Set(keys.map((k) => k.number))],
   );
-  return new Map(rows.map((r) => [keyOf(r.bet_type, r.number), r.total_stake]));
+  return new Map(rows.map((r) => [slipKey(r.bet_type, r.number), r.total_stake]));
 }
 
 /**
@@ -93,7 +103,7 @@ async function exposureTotals(roundId: number, keys: { betType: BetTypeCode; num
 async function ensureExposureRows(roundId: number, keys: { betType: BetTypeCode; number: string }[]) {
   if (keys.length === 0) return;
   const existing = await exposureTotals(roundId, keys);
-  const missing = keys.filter((k) => !existing.has(keyOf(k.betType, k.number)));
+  const missing = keys.filter((k) => !existing.has(slipKey(k.betType, k.number)));
   if (missing.length === 0) return;
   await run(
     `INSERT IGNORE INTO exposures (round_id, bet_type, number) VALUES ${missing.map(() => "(?, ?, ?)").join(", ")}`,
@@ -113,127 +123,99 @@ async function lockExposures(roundId: number, keys: { betType: BetTypeCode; numb
       betType,
       [...new Set(byType.get(betType))].sort(),
     );
-    for (const r of rows) totals.set(keyOf(betType, r.number), r.total_stake);
+    for (const r of rows) totals.set(slipKey(betType, r.number), r.total_stake);
   }
   return totals;
 }
 
-function fingerprintOf(lines: LineQuote[]): string {
-  const shape = lines.map((l) => [l.betType, l.number, l.stake, l.ok ? l.segments : l.reason]);
-  return createHash("sha1").update(JSON.stringify(shape)).digest("hex").slice(0, 16);
+function fingerprintOf(packageId: number, lines: LineQuote[]): string {
+  const shape = lines.map((l) => [l.betType, l.number, l.stake, l.ok ? [l.segments, l.discount] : l.reason]);
+  return createHash("sha1").update(JSON.stringify([packageId, shape])).digest("hex").slice(0, 16);
 }
 
 const failQuote = (roundId: number, error: QuoteError, message: string): Quote => ({
   roundId,
   ok: false,
+  packageId: 0,
   lines: [],
   totalStake: 0,
+  totalDiscount: 0,
+  totalNet: 0,
   fingerprint: "",
   error,
   message,
 });
 
-interface PriceInput {
+interface QuoteInput {
   /** Messages and bet type names in the request's language. */
   e: Dict["errors"];
   betLabels: Dict["lotto"]["betTypes"];
   round: Round | undefined;
-  lotto: Lotto | undefined;
-  settings: AllSettings;
+  config: RoundConfig | undefined;
+  packageId?: number;
   manual: Map<string, ManualLimit>;
   totals: Map<string, number>;
+  held: Map<string, number>;
 }
 
-/** Price every line against exposure totals and limits. Pure: the caller supplies the data. */
-function priceLines(roundId: number, lines: SlipLine[], now: number, { e, betLabels, round, lotto, settings, manual, totals }: PriceInput): Quote {
+/** `priceSlip` with the round's phase checked and every refusal put into words. */
+function quoteLines(roundId: number, lines: SlipLine[], now: number, { e, betLabels, round, config, packageId, manual, totals, held }: QuoteInput): Quote {
   const m = e.bet;
-  if (!round || !lotto) return failQuote(roundId, "round_not_found", m.roundNotFound);
+  if (!round) return failQuote(roundId, "round_not_found", m.roundNotFound);
   const phase = phaseOf(round, now);
   if (phase === "upcoming") return failQuote(roundId, "round_not_open", m.roundNotOpen);
   if (phase !== "open") return failQuote(roundId, "round_closed", m.roundClosed);
-  if (lines.length === 0) return failQuote(roundId, "empty", m.empty);
+  // The back office stores it with the round; for the few minutes it may be missing, nothing is taken.
+  if (!config) return failQuote(roundId, "round_not_open", m.roundNotOpen);
 
-  const configs = new Map(betConfigs(lotto, settings).map((c) => [c.code, c]));
-  const limits = billLimits(lotto, settings);
-  if (lines.length > limits.maxLines) {
-    return failQuote(roundId, "too_many_lines", fmt(m.tooManyLines, { n: limits.maxLines }));
+  const priced = priceSlip({ config, packageId, lines, manual, totals, held });
+  const words = (l: Extract<PricedLine, { ok: false }>) => {
+    switch (l.reason) {
+      case "unavailable":
+        return fmt(m.typeUnavailable, { type: BET_TYPES[l.betType] ? betLabels[l.betType].label : m.thisType });
+      case "invalid":
+        return fmt(m.digits, { n: BET_TYPES[l.betType].digits });
+      case "min":
+        return fmt(m.minStake, { n: formatNumber(l.limit ?? 0) });
+      case "max":
+        return fmt(m.maxPerNumber, { n: formatNumber(l.limit ?? 0) });
+      case "closed":
+        return m.numberClosed;
+      case "cap":
+        return l.remaining ? fmt(m.remaining, { n: formatNumber(l.remaining) }) : m.full;
+    }
+  };
+  const quoted: LineQuote[] = priced.lines.map((l) => (l.ok ? l : { ...l, message: words(l) }));
+  const quote: Quote = { ...priced, error: undefined, roundId, lines: quoted, fingerprint: fingerprintOf(priced.packageId, quoted) };
+  switch (priced.error) {
+    case undefined:
+      return quote;
+    case "package":
+      return { ...quote, error: "bad_package", message: m.badLines };
+    case "empty":
+      return { ...quote, error: "empty", message: m.empty };
+    case "too_many_lines":
+      return { ...quote, error: "too_many_lines", message: fmt(m.tooManyLines, { n: config.maxLines }) };
+    case "over_bill_limit":
+      return { ...quote, error: "over_bill_limit", message: fmt(m.overBill, { n: formatNumber(config.maxPerBill) }) };
   }
-
-  const running = new Map<string, number>();
-  const inBill = new Map<string, number>();
-
-  const priced: LineQuote[] = lines.map((line) => {
-    const cfg = configs.get(line.betType);
-    const base: LineBase = {
-      betType: line.betType,
-      number: line.number,
-      stake: line.stake,
-      baseRate100: cfg?.rate100 ?? 0,
-    };
-    if (!cfg) {
-      return { ...base, ok: false, reason: "unavailable", message: fmt(m.typeUnavailable, { type: BET_TYPES[line.betType] ? betLabels[line.betType].label : m.thisType }) };
-    }
-    if (!isValidNumber(line.betType, line.number)) {
-      return { ...base, ok: false, reason: "invalid", message: fmt(m.digits, { n: cfg.digits }) };
-    }
-    if (!Number.isInteger(line.stake) || line.stake < cfg.minStake) {
-      return { ...base, ok: false, reason: "min", message: fmt(m.minStake, { n: formatNumber(cfg.minStake) }) };
-    }
-    const key = keyOf(line.betType, line.number);
-    const sameNumberInBill = (inBill.get(key) ?? 0) + line.stake;
-    if (sameNumberInBill > cfg.maxPerNumber) {
-      return { ...base, ok: false, reason: "max", message: fmt(m.maxPerNumber, { n: formatNumber(cfg.maxPerNumber) }) };
-    }
-    const current = running.get(key) ?? totals.get(key) ?? 0;
-    const result = priceStake({
-      baseRate100: cfg.rate100,
-      profile: cfg.profile,
-      manual: manual.get(key) ?? null,
-      currentTotal: current,
-      stake: line.stake,
-    });
-    if (!result.ok) {
-      const message =
-        result.reason === "closed" ? m.numberClosed : result.remaining > 0 ? fmt(m.remaining, { n: formatNumber(result.remaining) }) : m.full;
-      return { ...base, ok: false, reason: result.reason, remaining: result.remaining, message };
-    }
-    running.set(key, current + line.stake);
-    inBill.set(key, sameNumberInBill);
-    return {
-      ...base,
-      ok: true,
-      segments: result.segments,
-      rate100: averageRate100(result.segments),
-      potential: payoutOf(result.segments),
-      reduced: result.segments.some((s) => s.rate100 < cfg.rate100),
-    };
-  });
-
-  const totalStake = lines.reduce((sum, l) => sum + (Number.isFinite(l.stake) ? l.stake : 0), 0);
-  if (totalStake > limits.maxPerBill) {
-    return {
-      ...failQuote(roundId, "over_bill_limit", fmt(m.overBill, { n: formatNumber(limits.maxPerBill) })),
-      lines: priced,
-      totalStake,
-    };
-  }
-  return { roundId, ok: priced.every((l) => l.ok), lines: priced, totalStake, fingerprint: fingerprintOf(priced) };
 }
 
 /** Price a slip for review. Reads only; placing re-prices under locks. */
-export async function quoteBill(_userId: number, roundId: number, lines: SlipLine[], now = Date.now()): Promise<Quote> {
+export async function quoteBill(userId: number, roundId: number, lines: SlipLine[], now = Date.now(), packageId?: number): Promise<Quote> {
   const { t } = await serverI18n();
   const e = t.errors;
   const row = await q1<RoundRow>("SELECT * FROM rounds WHERE id = ?", roundId);
   const round = row && toRound(row);
   if (!round) return failQuote(roundId, "round_not_found", e.bet.roundNotFound);
-  const [lotto, settings, manual, totals] = await Promise.all([
-    getLotto(round.lottoId),
-    getSettings(),
+  const keys = priceableKeys(lines);
+  const [stored, manual, totals, held] = await Promise.all([
+    getRoundConfig(roundId),
     manualLimitsMap(roundId),
-    exposureTotals(roundId, priceableKeys(lines)),
+    exposureTotals(roundId, keys),
+    heldStakes(userId, roundId, keys),
   ]);
-  return priceLines(roundId, lines, now, { e, betLabels: t.lotto.betTypes, round, lotto, settings, manual, totals });
+  return quoteLines(roundId, lines, now, { e, betLabels: t.lotto.betTypes, round, config: stored?.config, packageId, manual, totals, held });
 }
 
 const CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -261,13 +243,19 @@ export async function placeBill(
   userId: number,
   roundId: number,
   lines: SlipLine[],
-  { expected, acceptChanges = false, now = Date.now(), note }: { expected?: string; acceptChanges?: boolean; now?: number; note?: string } = {},
+  {
+    expected,
+    acceptChanges = false,
+    now = Date.now(),
+    note,
+    packageId,
+    requestId,
+  }: { expected?: string; acceptChanges?: boolean; now?: number; note?: string; packageId?: number; requestId?: string } = {},
 ): Promise<PlaceResult> {
-  // Everything that comes from the shared caches is read before the transaction starts.
-  const settings = await getSettings();
   const { t } = await serverI18n();
   const e = t.errors;
   const preview = await q1<RoundRow>("SELECT * FROM rounds WHERE id = ?", roundId);
+  // Cached lottery data is read before the transaction starts.
   const lotto = preview ? await getLotto(preview.lotto_id) : undefined;
   if (preview && phaseOf(toRound(preview), now) === "open") await ensureExposureRows(roundId, priceableKeys(lines));
   try {
@@ -280,11 +268,24 @@ export async function placeBill(
       const user = await q1<{ status: string; balance: number; role: string }>("SELECT status, balance, role FROM users WHERE id = ? FOR UPDATE", userId);
       if (!user || user.status !== "active" || user.role !== "member") refuse({ ok: false, error: "suspended", message: e.bet.suspended });
 
+      // Under the member's lock, so two sends of one request cannot both get past this.
+      if (requestId) {
+        const first = await q1<{ id: number; code: string; total_stake: number }>(
+          "SELECT id, code, total_stake FROM bills WHERE user_id = ? AND request_id = ?",
+          userId,
+          requestId,
+        );
+        if (first) return { ok: true, billId: first.id, code: first.code, balance: user!.balance, paid: first.total_stake };
+      }
+
       // Read before taking the number locks: everything after the locks should be short.
+      // The config cannot change now: the back office takes the round row exclusively to rewrite it.
+      const stored = await getRoundConfig(roundId);
       const manual = await manualLimitsMap(roundId);
       const keys = round && phaseOf(round, now) === "open" ? priceableKeys(lines) : [];
+      const held = await heldStakes(userId, roundId, keys);
       const totals = await lockExposures(roundId, keys);
-      const missing = keys.filter((k) => !totals.has(keyOf(k.betType, k.number)));
+      const missing = keys.filter((k) => !totals.has(slipKey(k.betType, k.number)));
       if (missing.length) {
         // A row the pre-step could not create (very rare race): create it now under the lock.
         await run(
@@ -293,7 +294,7 @@ export async function placeBill(
         );
         for (const [k, v] of await lockExposures(roundId, missing)) totals.set(k, v);
       }
-      const quote = priceLines(roundId, lines, now, { e, betLabels: t.lotto.betTypes, round, lotto, settings, manual, totals });
+      const quote = quoteLines(roundId, lines, now, { e, betLabels: t.lotto.betTypes, round, config: stored?.config, packageId, manual, totals, held });
       if (quote.error === "round_closed" || quote.error === "round_not_open" || quote.error === "round_not_found") {
         refuse({ ok: false, error: "round_closed", message: quote.message ?? e.bet.roundClosed, quote });
       }
@@ -303,9 +304,8 @@ export async function placeBill(
       if (expected && expected !== quote.fingerprint && !acceptChanges) {
         refuse({ ok: false, error: "rate_changed", message: e.bet.rateChanged, quote });
       }
-      const totalSatang = quote.totalStake * 100;
-      if (user!.balance < totalSatang) {
-        refuse({ ok: false, error: "insufficient_balance", message: fmt(e.bet.insufficient, { amount: formatBaht(totalSatang - user!.balance) }), quote });
+      if (user!.balance < quote.totalNet) {
+        refuse({ ok: false, error: "insufficient_balance", message: fmt(e.bet.insufficient, { amount: formatBaht(quote.totalNet - user!.balance) }), quote });
       }
 
       let code = newBillCode();
@@ -314,11 +314,16 @@ export async function placeBill(
         try {
           billId = (
             await run(
-              "INSERT INTO bills (code, user_id, round_id, total_stake, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+              `INSERT INTO bills (code, user_id, round_id, total_stake, discount, package_id, config_version, request_id, note, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               code,
               userId,
               roundId,
-              totalSatang,
+              quote.totalNet,
+              quote.totalDiscount,
+              quote.packageId,
+              stored!.version,
+              requestId ?? null,
               note?.slice(0, 255) ?? null,
               now,
             )
@@ -333,12 +338,12 @@ export async function placeBill(
       const okLines = quote.lines.filter((l): l is Extract<LineQuote, { ok: true }> => l.ok);
       await insertMany(
         "bill_items",
-        ["bill_id", "round_id", "bet_type", "number", "stake", "segments", "rate100", "potential"],
-        okLines.map((l) => [billId, roundId, l.betType, l.number, l.stake, json.str(l.segments), l.rate100, l.potential]),
+        ["bill_id", "round_id", "bet_type", "number", "stake", "discount", "segments", "rate100", "potential"],
+        okLines.map((l) => [billId, roundId, l.betType, l.number, l.stake, l.discount, json.str(l.segments), l.rate100, l.potential]),
       );
       const byKey = new Map<string, { betType: string; number: string; stake: number; potential: number }>();
       for (const l of okLines) {
-        const k = keyOf(l.betType, l.number);
+        const k = slipKey(l.betType, l.number);
         const agg = byKey.get(k) ?? { betType: l.betType, number: l.number, stake: 0, potential: 0 };
         agg.stake += l.stake;
         agg.potential += l.potential;
@@ -360,19 +365,19 @@ export async function placeBill(
       }
 
       // The wallet row has been locked since the start, so the balance read then is exact.
-      const balance = user!.balance - totalSatang;
-      await run("UPDATE users SET balance = balance - ? WHERE id = ?", totalSatang, userId);
+      const balance = user!.balance - quote.totalNet;
+      await run("UPDATE users SET balance = balance - ? WHERE id = ?", quote.totalNet, userId);
       await run(
         "INSERT INTO transactions (user_id, wallet, type, amount, balance_after, ref, note, created_at) VALUES (?, 'balance', 'bet', ?, ?, ?, ?, ?)",
         userId,
-        -totalSatang,
+        -quote.totalNet,
         balance,
         code,
         `${lotto!.shortName} ${roundLabel(round!)}`.slice(0, 255),
         now,
       );
       afterCommit(() => invalidate(`limits:${roundId}`));
-      return { ok: true, billId, code, balance, quote };
+      return { ok: true, billId, code, balance, paid: quote.totalNet, quote };
     });
     return placed;
   } catch (error) {
@@ -396,6 +401,7 @@ export async function cancelBill(userId: number, billId: number, now = Date.now(
     const round = await q1<{ closes_at: number; status: string }>("SELECT closes_at, status FROM rounds WHERE id = ? LOCK IN SHARE MODE", bill.round_id);
     if (!round || round.status !== "scheduled" || now >= round.closes_at) return { ok: false, error: "round_closed" };
     if (now - bill.created_at > site.cancelWindowMin * 60_000) return { ok: false, error: "window_passed" };
+    if (now > round.closes_at - site.cancelCutoffMin * 60_000) return { ok: false, error: "window_passed" };
 
     await q1("SELECT id FROM users WHERE id = ? FOR UPDATE", userId); // wallet before numbers, like placeBill
     const items = await q<{ bet_type: string; number: string; stake: number; potential: number }>(

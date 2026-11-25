@@ -7,6 +7,7 @@ import { deriveResult } from "chokprathan-core/rules/match";
 import { DEFAULT_SITE, DEFAULT_WALLET, LOTTO_CATALOG } from "@/server/catalog";
 import { hashPasswordSync } from "@/server/services/auth";
 import { placeBill, type SlipLine } from "@/server/services/bills";
+import { giveRoundsConfig } from "./seed-configs";
 import { approveDeposit, approveWithdrawal, createDeposit, requestWithdrawal } from "@/server/services/finance";
 import { ensureRounds, randomResult, setResult } from "@/server/services/rounds";
 import { getSettings, setSetting } from "@/server/services/settings";
@@ -188,6 +189,8 @@ export async function seedDemo({ now = Date.now(), days = 4, log = (line: string
      FROM rounds r JOIN lottos l ON l.id = r.lotto_id WHERE r.closes_at >= ? ORDER BY r.closes_at`,
     t0,
   );
+  // The back office stores these with each round; a fresh demo has to make its own before betting.
+  await giveRoundsConfig(now);
 
   const events: SeedEvent[] = [];
   let order = 0;
@@ -299,7 +302,8 @@ export async function seedDemo({ now = Date.now(), days = 4, log = (line: string
         });
       }
       const t = Math.max(r.opens_at + MINUTE, now - int(15, 240) * MINUTE);
-      if (lines.length) bet(pick(crowd), r, lines, t, true);
+      // A different member for each: one member may hold only so much on a number.
+      if (lines.length) bet(crowd[k % crowd.length], r, lines, t, true);
     }
     for (let k = 0; k < (r.slug === "yiki" ? 3 : 8); k++) {
       const t = Math.max(r.opens_at + MINUTE, now - int(15, 240) * MINUTE);

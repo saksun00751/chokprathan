@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleAlert, CircleCheck, LoaderCircle, TriangleAlert } from "lucide-react";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
 import { formatBaht, formatRate } from "chokprathan-core/rules/money";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -46,6 +46,8 @@ export function ReviewSheet({
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [accept, setAccept] = useState(false);
   const [pending, start] = useTransition();
+  // One id per slip as sent: a retry after a lost answer returns the same bill instead of a second one.
+  const attempt = useRef<{ sig: string; id: string } | null>(null);
 
   const lines = [...items]
     .sort((a, b) => BET_TYPE_ORDER.indexOf(a.betType) - BET_TYPE_ORDER.indexOf(b.betType))
@@ -82,11 +84,15 @@ export function ReviewSheet({
   const confirm = () =>
     start(async () => {
       if (!quote) return;
-      const r = await placeSlipAction(roundId, lines, { expected: quote.fingerprint, acceptChanges: accept });
+      if (attempt.current?.sig !== signature) {
+        attempt.current = { sig: signature, id: Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("") };
+      }
+      const r = await placeSlipAction(roundId, lines, { expected: quote.fingerprint, acceptChanges: accept, requestId: attempt.current.id });
       if (!r.ok) return setQuoted({ sig: signature, quote, message: { tone: "danger", text: r.error } });
       const result = r.data;
       if (result.ok) {
-        setPlaced({ billId: result.billId, code: result.code, total: result.quote.totalStake });
+        attempt.current = null;
+        setPlaced({ billId: result.billId, code: result.code, total: result.paid });
         return;
       }
       setQuoted({
@@ -97,8 +103,9 @@ export function ReviewSheet({
     });
 
   const stage = placed ? ({ kind: "success", ...placed } as const) : loading ? ({ kind: "loading" } as const) : ({ kind: "ready" } as const);
-  const total = quote?.totalStake ?? lines.reduce((s, l) => s + l.stake, 0);
-  const short = balance < total * 100;
+  // satang the member would pay
+  const due = quote?.totalNet ?? lines.reduce((s, l) => s + l.stake, 0) * 100;
+  const short = balance < due;
   const rejected = quote?.lines.filter((l) => !l.ok).length ?? 0;
   const reduced = quote?.lines.filter((l) => l.ok && l.reduced).length ?? 0;
   const canConfirm = stage.kind === "ready" && quote?.ok && !quote.error && !short && !pending;
@@ -137,7 +144,7 @@ export function ReviewSheet({
             <div className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-ink-3">{rv.total}</p>
-                <p className="tnum text-xl font-semibold">฿{formatNumber(total)}</p>
+                <p className="tnum text-xl font-semibold">฿{formatBaht(due, { decimals: "auto" })}</p>
               </div>
               {short ? (
                 <ButtonLink href="/wallet/deposit" size="lg" variant="gold">
@@ -162,7 +169,7 @@ export function ReviewSheet({
           <p className="mt-1 text-ink-2">
             {rv.billNo} <span className="tnum font-semibold text-ink">{stage.code}</span>
           </p>
-          <p className="tnum mt-3 text-2xl font-semibold">฿{formatNumber(stage.total)}</p>
+          <p className="tnum mt-3 text-2xl font-semibold">฿{formatBaht(stage.total, { decimals: "auto" })}</p>
           <p className="mt-1 text-sm text-ink-3">{rv.paidOnResult}</p>
         </div>
       ) : stage.kind === "loading" ? (
@@ -181,7 +188,7 @@ export function ReviewSheet({
           {short && (
             <p className="flex items-start gap-2 rounded-control bg-danger-soft px-3 py-2.5 text-sm text-danger">
               <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              {fmt(rv.short, { amount: formatBaht(total * 100 - balance) })}
+              {fmt(rv.short, { amount: formatBaht(due - balance) })}
             </p>
           )}
           {reduced > 0 && (

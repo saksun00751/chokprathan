@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { bkkMs } from "chokprathan-core/rules/time";
 import { json, q, q1, run } from "@/server/db";
+import { giveRoundsConfig } from "@/server/db/seed-configs";
 import { hasTestDb, resetDb } from "@/test/db";
 import { cancelBill, placeBill, quoteBill, settleRound } from "./bills";
 import { cancelRound, setResult } from "./rounds";
@@ -63,6 +64,7 @@ describe.skipIf(!hasTestDb)("bills on MariaDB", () => {
         closesAt + 25 * 60_000,
       )
     ).lastId;
+    await giveRoundsConfig(now);
   });
 
   describe("placeBill", () => {
@@ -82,8 +84,9 @@ describe.skipIf(!hasTestDb)("bills on MariaDB", () => {
     test("a stake that crosses a tier threshold is split into segments", async () => {
       const whale = await makeUser("0822222222", 100_000_000);
       const m = await makeUser("0811111111", 1_000_000);
+      const whale2 = await makeUser("0833333333", 100_000_000);
       await placeBill(whale, roundId, [{ betType: "top2", number: "25", stake: 2000 }], { now });
-      await placeBill(whale, roundId, [{ betType: "top2", number: "25", stake: 2000 }], { now });
+      await placeBill(whale2, roundId, [{ betType: "top2", number: "25", stake: 2000 }], { now });
       const r = await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 2000 }], { now });
       expect(r.ok).toBe(true);
       const item = (await q1<{ segments: string; potential: number }>(
@@ -101,11 +104,13 @@ describe.skipIf(!hasTestDb)("bills on MariaDB", () => {
     test("refuses with rate_changed when the confirmed quote is stale, unless changes are accepted", async () => {
       const whale = await makeUser("0822222222", 100_000_000);
       const m = await makeUser("0811111111", 1_000_000);
+      const whale2 = await makeUser("0833333333", 100_000_000);
+      const whale3 = await makeUser("0844444444", 100_000_000);
       await placeBill(whale, roundId, [{ betType: "top2", number: "25", stake: 2000 }], { now });
-      await placeBill(whale, roundId, [{ betType: "top2", number: "25", stake: 2000 }], { now });
+      await placeBill(whale2, roundId, [{ betType: "top2", number: "25", stake: 2000 }], { now });
       const quote = await quoteBill(m, roundId, [{ betType: "top2", number: "25", stake: 1000 }], now);
       expect(quote.ok).toBe(true);
-      await placeBill(whale, roundId, [{ betType: "top2", number: "25", stake: 2000 }], { now });
+      await placeBill(whale3, roundId, [{ betType: "top2", number: "25", stake: 2000 }], { now });
 
       const stale = await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 1000 }], { now, expected: quote.fingerprint });
       expect(stale).toMatchObject({ ok: false, error: "rate_changed" });
@@ -147,6 +152,7 @@ describe.skipIf(!hasTestDb)("bills on MariaDB", () => {
         json.str({ top2: { enabled: true, tiers: [{ threshold: 100, percent: 50 }], cap: 300 } }),
         lottoId,
       );
+      await giveRoundsConfig(now);
       const a = await makeUser("0822222222", 10_000_000);
       const b = await makeUser("0811111111", 10_000_000);
       await placeBill(a, roundId, [{ betType: "top2", number: "25", stake: 200 }], { now });
@@ -175,6 +181,56 @@ describe.skipIf(!hasTestDb)("bills on MariaDB", () => {
       const r = await placeBill(staff, roundId, [{ betType: "top2", number: "25", stake: 100 }], { now });
       expect(r).toMatchObject({ ok: false, error: "suspended" });
     });
+
+    test("the per-number limit covers all of a member's bills on the round", async () => {
+      const m = await makeUser("0811111111", 10_000_000);
+      expect((await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 1500 }], { now })).ok).toBe(true);
+      const over = await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 600 }], { now });
+      expect(over).toMatchObject({ ok: false, error: "invalid" });
+      expect((await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 500 }], { now })).ok).toBe(true);
+    });
+
+    test("a repeated request returns the first bill and charges once, even after closing", async () => {
+      const m = await makeUser("0811111111", 1_000_000);
+      const send = (at: number) => placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 100 }], { now: at, requestId: "req-00000001" });
+      const [a, b] = await Promise.all([send(now), send(now)]);
+      const late = await send(closesAt + 1);
+      expect(a.ok && b.ok && late.ok).toBe(true);
+      expect(new Set([a, b, late].map((r) => (r.ok ? r.billId : 0))).size).toBe(1);
+      expect((await balanceOf(m)).balance).toBe(990_000);
+      expect(await exposure("top2", "25")).toBe(100);
+    });
+
+    test("a discounted package charges less, pays winnings on the full stake, and refunds what was paid", async () => {
+      const row = (await q1<{ config: string }>("SELECT config FROM round_configs WHERE round_id = ?", roundId))!;
+      const config = JSON.parse(row.config);
+      config.packages.push({ id: 999, code: "d", name: "d", rates: { top2: { rate100: 7500, discountBp: 1500 } } });
+      await run("UPDATE round_configs SET config = ? WHERE round_id = ?", json.str(config), roundId);
+      const m = await makeUser("0811111111", 1_000_000);
+      const r = await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 100 }], { now, packageId: 999 });
+      expect(r).toMatchObject({ ok: true, paid: 8500, balance: 991_500 });
+      expect(await q1("SELECT total_stake, discount, package_id FROM bills WHERE user_id = ?", m)).toEqual({ total_stake: 8500, discount: 1500, package_id: 999 });
+      expect(await q1("SELECT stake, discount, potential FROM bill_items WHERE round_id = ?", roundId)).toEqual({ stake: 100, discount: 1500, potential: 750_000 });
+      expect(await cancelBill(m, r.ok ? r.billId : 0, now + 1000)).toEqual({ ok: true });
+      expect((await balanceOf(m)).balance).toBe(1_000_000);
+    });
+
+    test("changing the lottery after a bill does not move the round's prices", async () => {
+      const m = await makeUser("0811111111", 1_000_000);
+      await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 10 }], { now });
+      await run("UPDATE lottos SET rates = ? WHERE id = ?", json.str({ top2: 100 }), lottoId);
+      await giveRoundsConfig(now);
+      const quote = await quoteBill(m, roundId, [{ betType: "top2", number: "31", stake: 10 }], now);
+      expect(quote.lines[0]).toMatchObject({ ok: true, rate100: 9500 });
+    });
+
+    test("a round without a config takes no bet", async () => {
+      await run("DELETE FROM round_configs");
+      const m = await makeUser("0811111111", 1_000_000);
+      const r = await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 10 }], { now });
+      expect(r).toMatchObject({ ok: false, error: "round_closed" });
+      expect((await balanceOf(m)).balance).toBe(1_000_000);
+    });
   });
 
   describe("concurrency", () => {
@@ -184,6 +240,7 @@ describe.skipIf(!hasTestDb)("bills on MariaDB", () => {
         json.str({ top2: { enabled: true, tiers: [{ threshold: 300, percent: 50 }], cap: 1000 } }),
         lottoId,
       );
+      await giveRoundsConfig(now);
       const users = await Promise.all(Array.from({ length: 8 }, (_, i) => makeUser(`08100000${String(i).padStart(2, "0")}`, 10_000_000)));
       const results = await Promise.all(users.map((u) => placeBill(u, roundId, [{ betType: "top2", number: "77", stake: 200 }], { now, acceptChanges: true })));
       const placed = results.filter((r) => r.ok).length;
@@ -333,6 +390,15 @@ describe.skipIf(!hasTestDb)("bills on MariaDB", () => {
       expect(p.ok).toBe(true);
       expect(await exposure("top2", "25")).toBe(70);
       expect((await balanceOf(m)).balance).toBe(1_000_000 - 7_000);
+    });
+
+    test("is refused in the last minutes before closing", async () => {
+      const m = await makeUser("0811111111", 1_000_000);
+      const at = closesAt - 6 * 60_000;
+      const placed = await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 100 }], { now: at });
+      if (!placed.ok) throw new Error("setup failed");
+      expect(await cancelBill(m, placed.billId, closesAt - 4 * 60_000)).toEqual({ ok: false, error: "window_passed" });
+      expect(await cancelBill(m, placed.billId, closesAt - 5 * 60_000)).toEqual({ ok: true });
     });
   });
 });

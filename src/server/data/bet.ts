@@ -1,14 +1,15 @@
 import "server-only";
 import { io } from "next/cache";
+import { betRules } from "chokprathan-core/rules/quote";
 import type { BetTypeCode, LottoGroup, ResultFormat } from "chokprathan-core/rules/types";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { json, q, q1 } from "@/server/db";
 import type { SessionUser } from "@/server/services/auth";
-import { betConfigs, billLimits, getLotto } from "@/server/services/lottos";
+import { getLotto } from "@/server/services/lottos";
+import { getRoundConfig } from "@/server/services/round-config";
 import { roundLimits, type LimitBadge } from "@/server/services/risk";
 import { getRound, phaseOf, toRound, type RoundPhase, type RoundRow } from "@/server/services/rounds";
-import { getSettings } from "@/server/services/settings";
 
 export interface BetConfigView {
   code: BetTypeCode;
@@ -48,8 +49,8 @@ export async function getBetPage(roundId: number, viewer: SessionUser, rebetBill
   const lotto = await getLotto(round.lottoId);
   if (!lotto || !lotto.enabled) return null;
 
-  const [settings, siblingRows, setRows, badges, rebet] = await Promise.all([
-    getSettings(),
+  const [stored, siblingRows, setRows, badges, rebet] = await Promise.all([
+    getRoundConfig(round.id),
     q<RoundRow>(
       `SELECT * FROM rounds WHERE lotto_id = ? AND status = 'scheduled' AND opens_at <= ? AND closes_at > ?
        ORDER BY closes_at LIMIT 8`,
@@ -68,11 +69,15 @@ export async function getBetPage(roundId: number, viewer: SessionUser, rebetBill
       : Promise.resolve([]),
   ]);
 
+  // The back office stores prices with each round; without them there is nothing to bet on yet.
+  if (!stored) return null;
+  const rules = betRules(stored.config);
+
   return {
     serverNow: now,
     round: { id: round.id, label: roundName(round, lang, t), opensAt: round.opensAt, closesAt: round.closesAt, drawAt: round.drawAt, phase: phaseOf(round, now) },
     lotto: { id: lotto.id, slug: lotto.slug, name: lottoName(lotto, t), shortName: lottoShort(lotto, t), flag: lotto.flag, format: lotto.format, group: lotto.group },
-    configs: betConfigs(lotto, settings).map(({ code, digits, rate100, maxPerNumber, minStake }) => ({
+    configs: rules.map(({ code, digits, rate100, maxPerNumber, minStake }) => ({
       code,
       label: t.lotto.betTypes[code].label,
       short: t.lotto.betTypes[code].short,
@@ -81,7 +86,7 @@ export async function getBetPage(roundId: number, viewer: SessionUser, rebetBill
       maxPerNumber,
       minStake,
     })),
-    limits: billLimits(lotto, settings),
+    limits: { minStake: Math.min(...rules.map((r) => r.minStake)), maxPerBill: stored.config.maxPerBill, maxLines: stored.config.maxLines },
     badges,
     sets: setRows.map((s) => ({ id: s.id, name: s.name, items: json.parse<SavedSet["items"]>(s.items, []) })),
     siblings: siblingRows.map((r) => {

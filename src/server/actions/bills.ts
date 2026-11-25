@@ -42,7 +42,7 @@ export async function quoteSlipAction(roundId: number, lines: unknown): Promise<
 export async function placeSlipAction(
   roundId: number,
   lines: unknown,
-  opts: { expected?: string; acceptChanges?: boolean },
+  opts: { expected?: string; acceptChanges?: boolean; requestId?: string },
 ): Promise<ActionResult<PlaceResult>> {
   const e = await errorsT();
   const viewer = await getViewer();
@@ -56,6 +56,7 @@ export async function placeSlipAction(
   const result = await placeBill(viewer.id, roundId, parsed, {
     expected: typeof opts?.expected === "string" ? opts.expected.slice(0, 32) : undefined,
     acceptChanges: opts?.acceptChanges === true,
+    requestId: typeof opts?.requestId === "string" && /^[A-Za-z0-9-]{8,40}$/.test(opts.requestId) ? opts.requestId : undefined,
   });
   if (result.ok) refresh();
   return { ok: true, data: result };
