@@ -2,10 +2,11 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Flag } from "@/components/ui/flag";
 import { Card, PageHeader, SectionTitle, Skeleton } from "@/components/ui/primitives";
-import { GROUP_ORDER } from "@/domain/labels";
+import { byGroup } from "@/domain/lotto-groups";
 import { formatRate } from "@/domain/money";
 import { fmt, formatNumber } from "@/i18n/format";
 import { getI18n, pageMeta } from "@/i18n/rsc";
+import { getGroups } from "@/server/data/groups";
 import { getRateTables } from "@/server/data/results";
 
 export const generateMetadata = () => pageMeta("payrate");
@@ -23,7 +24,7 @@ export default async function PayratePage() {
 }
 
 async function PayrateBody() {
-  const [{ rows, codes, tiers, limits }, { t }] = await Promise.all([getRateTables(), getI18n()]);
+  const [{ rows, codes, tiers, limits }, groups, { t }] = await Promise.all([getRateTables(), getGroups(), getI18n()]);
   const p = t.info.payrate;
   return (
     <div className="flex flex-col gap-10">
@@ -39,14 +40,12 @@ async function PayrateBody() {
               ))}
             </tr>
           </thead>
-          {GROUP_ORDER.map((g) => {
-            const list = rows.filter((r) => r.group === g);
-            if (!list.length) return null;
+          {byGroup(rows, groups).map(({ group, lottos: list }) => {
             return (
-              <tbody key={g} className="divide-y divide-line">
+              <tbody key={group.code} className="divide-y divide-line">
                 <tr>
                   <th colSpan={codes.length + 1} className="bg-canvas px-4 py-2 text-left text-xs font-semibold text-ink-2">
-                    {t.lotto.groups[g]}
+                    {groups.find((g) => g.code === group.code)?.label ?? group.code}
                   </th>
                 </tr>
                 {list.map((r) => (

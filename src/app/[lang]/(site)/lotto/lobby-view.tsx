@@ -3,23 +3,22 @@
 import Link from "next/link";
 import { ChevronRight, Search } from "lucide-react";
 import { useState } from "react";
-import { MenuArt, type MenuArtKey } from "@/components/art/scenes";
+import { MenuArt } from "@/components/art/scenes";
 import { RoundCard } from "@/components/lotto/round-card";
 import { Countdown, LiveClock, ServerTimeSync, useNow } from "@/components/ui/clock";
 import { Flag } from "@/components/ui/flag";
 import { EmptyState } from "@/components/ui/primitives";
-import { GROUP_ORDER } from "@/domain/labels";
-import type { LottoGroup } from "@/domain/types";
+import { isBuiltinGroup, isGroupArt } from "@/domain/lotto-groups";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatClock } from "@/i18n/format";
 import { cn } from "@/lib/cn";
+import type { GroupView } from "@/server/data/groups";
 import type { LobbyData, LobbyRound } from "@/server/data/lobby";
 
-type Filter = LottoGroup | "all";
+/** A group code, or "all". */
+type Filter = string;
 
-const GROUP_ART: Record<LottoGroup, MenuArtKey> = { thai: "ticket", foreign: "coins", stock: "chart", yiki: "balls" };
-
-export function LobbyView({ data, initialGroup }: { data: LobbyData; initialGroup: Filter }) {
+export function LobbyView({ data, groups: allGroups, initialGroup }: { data: LobbyData; groups: GroupView[]; initialGroup: Filter }) {
   const { t } = useI18n();
   const lb = t.site.lobby;
   const [filter, setFilter] = useState<Filter>(initialGroup);
@@ -33,16 +32,18 @@ export function LobbyView({ data, initialGroup }: { data: LobbyData; initialGrou
   const yiki = data.yiki.filter((r) => r.closesAt > now);
   const closingSoon = visible.filter((r) => r.phase !== "upcoming" && r.closesAt - now <= 60 * 60_000).slice(0, 4);
 
+  // Built-ins always have a tab; a staff-made group gets one once it has a lottery taking bets.
+  const tabs = allGroups.filter((g) => isBuiltinGroup(g.code) || data.rounds.some((r) => r.group === g.code));
   const counts: Record<Filter, number> = {
+    ...Object.fromEntries(tabs.map((g) => [g.code, visible.filter((r) => r.group === g.code).length])),
     all: visible.length + (yiki.length ? 1 : 0),
-    thai: visible.filter((r) => r.group === "thai").length,
-    foreign: visible.filter((r) => r.group === "foreign").length,
-    stock: visible.filter((r) => r.group === "stock").length,
     yiki: yiki.length,
   };
+  const yikiLabel = allGroups.find((g) => g.code === "yiki")?.label ?? t.lotto.groups.yiki;
+  const notes: Readonly<Record<string, string>> = lb.notes;
 
-  const groups = (filter === "all" ? GROUP_ORDER : [filter]).filter((g) => g !== "yiki");
-  const showYiki = (filter === "all" || filter === "yiki") && (!needle || has(t.lotto.groups.yiki));
+  const groups = tabs.filter((g) => g.code !== "yiki" && (filter === "all" || filter === g.code));
+  const showYiki = (filter === "all" || filter === "yiki") && (!needle || has(yikiLabel));
 
   return (
     <div>
@@ -51,7 +52,7 @@ export function LobbyView({ data, initialGroup }: { data: LobbyData; initialGrou
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="-mx-4 min-w-0 overflow-x-auto px-4 md:mx-0 md:px-0" role="tablist" aria-label={lb.tabsLabel}>
             <div className="flex w-max gap-1 rounded-control bg-panel p-1">
-              {(["all", ...GROUP_ORDER] as Filter[]).map((g) => (
+              {["all", ...tabs.map((x) => x.code)].map((g) => (
                 <button
                   key={g}
                   type="button"
@@ -63,7 +64,7 @@ export function LobbyView({ data, initialGroup }: { data: LobbyData; initialGrou
                     filter === g ? "bg-surface text-ink shadow-card" : "text-ink-2 hover:text-ink",
                   )}
                 >
-                  {g === "all" ? t.common.all : t.lotto.groups[g]}
+                  {g === "all" ? t.common.all : tabs.find((x) => x.code === g)?.label}
                   <span className="tnum text-xs text-ink-3">{counts[g]}</span>
                 </button>
               ))}
@@ -101,18 +102,18 @@ export function LobbyView({ data, initialGroup }: { data: LobbyData; initialGrou
         </section>
       )}
 
-      {groups.map((g) => {
+      {groups.map(({ code: g, label, art }) => {
         const list = visible.filter((r) => r.group === g);
         if (list.length === 0) return null;
         return (
           <section key={g} aria-labelledby={`g-${g}`} className="mb-8">
             <div className="mb-3 flex items-center gap-3">
-              <MenuArt art={GROUP_ART[g]} className="size-11 shrink-0" />
+              <MenuArt art={isGroupArt(art) ? art : "ticket"} className="size-11 shrink-0" />
               <div>
                 <h2 id={`g-${g}`} className="text-lg leading-tight font-semibold">
-                  {t.lotto.groups[g]}
+                  {label}
                 </h2>
-                <p className="text-sm text-ink-3">{lb.notes[g]}</p>
+                {notes[g] && <p className="text-sm text-ink-3">{notes[g]}</p>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
@@ -131,7 +132,7 @@ export function LobbyView({ data, initialGroup }: { data: LobbyData; initialGrou
               <MenuArt art="balls" className="size-11 shrink-0" />
               <div>
                 <h2 id="g-yiki" className="text-lg leading-tight font-semibold">
-                  {t.lotto.groups.yiki}
+                  {yikiLabel}
                 </h2>
                 <p className="text-sm text-ink-3">{lb.notes.yiki}</p>
               </div>

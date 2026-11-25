@@ -10,7 +10,8 @@ export type BetTypeCode =
   | "runBottom";
 
 export type ResultFormat = "standard" | "thai_gov" | "laos4";
-export type LottoGroup = "thai" | "foreign" | "stock" | "yiki";
+/** A `lotto_groups.code`: a built-in (see domain/lotto-groups) or one staff created. */
+export type LottoGroup = string;
 
 export interface RoundResult {
   top3: string;
@@ -42,8 +43,12 @@ export interface RiskProfile {
 
 export type ManualLimit = { kind: "percent"; percent: number } | { kind: "closed" };
 
-/** days for weekly: 0 = Sunday … 6 = Saturday. close: "HH:MM" Asia/Bangkok. */
+/**
+ * days for weekly: 0 = Sunday … 6 = Saturday. close: "HH:MM" Asia/Bangkok.
+ * opens (optional, "HH:MM" Asia/Bangkok): betting opens at that time on the round's day, e.g. "00:00" for midnight.
+ * Without it a round opens when the previous draw closes.
+ */
 export type Schedule =
-  | { kind: "weekly"; days: number[]; close: string }
-  | { kind: "monthly"; days: number[]; close: string }
-  | { kind: "interval"; firstClose: string; everyMin: number; count: number };
+  | { kind: "weekly"; days: number[]; close: string; opens?: string }
+  | { kind: "monthly"; days: number[]; close: string; opens?: string }
+  | { kind: "interval"; firstClose: string; everyMin: number; count: number; opens?: string };

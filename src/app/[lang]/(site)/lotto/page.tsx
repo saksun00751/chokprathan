@@ -1,14 +1,12 @@
 import { Suspense } from "react";
 import { RoundCardSkeleton } from "@/components/lotto/round-card";
 import { PageHeader } from "@/components/ui/primitives";
-import type { LottoGroup } from "@/domain/types";
 import { getI18n, pageMeta } from "@/i18n/rsc";
+import { getGroups } from "@/server/data/groups";
 import { getLobby } from "@/server/data/lobby";
 import { LobbyView } from "./lobby-view";
 
 export const generateMetadata = () => pageMeta("lotto");
-
-const GROUPS: LottoGroup[] = ["thai", "foreign", "stock", "yiki"];
 
 export default async function LottoLobbyPage({ searchParams }: PageProps<"/[lang]/lotto">) {
   const { t } = await getI18n();
@@ -23,9 +21,9 @@ export default async function LottoLobbyPage({ searchParams }: PageProps<"/[lang
 }
 
 async function LobbyBody({ searchParams }: Pick<PageProps<"/[lang]/lotto">, "searchParams">) {
-  const [{ group }, data] = await Promise.all([searchParams, getLobby()]);
-  const initial = GROUPS.find((g) => g === group) ?? "all";
-  return <LobbyView data={data} initialGroup={initial} />;
+  const [{ group }, data, groups] = await Promise.all([searchParams, getLobby(), getGroups()]);
+  const initial = groups.find((g) => g.code === group)?.code ?? "all";
+  return <LobbyView data={data} groups={groups} initialGroup={initial} />;
 }
 
 function LobbySkeleton() {

@@ -4,9 +4,10 @@ import { Suspense } from "react";
 import { ResultDigits, ResultInline } from "@/components/lotto/result-digits";
 import { Flag } from "@/components/ui/flag";
 import { Card, PageHeader, SectionTitle, Skeleton } from "@/components/ui/primitives";
-import type { LottoGroup } from "@/domain/types";
+import { byGroup } from "@/domain/lotto-groups";
 import { fmt, formatClock, formatDate, formatDateTime } from "@/i18n/format";
 import { getI18n, pageMeta } from "@/i18n/rsc";
+import { getGroups } from "@/server/data/groups";
 import { getLatestResults } from "@/server/data/lobby";
 import { getYikiRecent } from "@/server/data/results";
 
@@ -25,10 +26,12 @@ export default async function ResultsPage() {
 }
 
 async function ResultsBody() {
-  const [{ results }, yiki, { lang, t }] = await Promise.all([getLatestResults(60), getYikiRecent(12), getI18n()]);
+  const [{ results }, yiki, allGroups, { lang, t }] = await Promise.all([getLatestResults(60), getYikiRecent(12), getGroups(), getI18n()]);
   const r_ = t.info.results;
   const gov = results.find((r) => r.slug === "thai-gov");
-  const groups: LottoGroup[] = ["thai", "foreign", "stock"];
+  // Yiki has its own table below, and the government draw its own card above.
+  const sections = byGroup(results.filter((r) => r.group !== "yiki" && r.slug !== "thai-gov"), allGroups);
+  const labelOf = (code: string) => allGroups.find((g) => g.code === code)?.label ?? code;
 
   return (
     <div className="flex flex-col gap-8">
@@ -48,12 +51,10 @@ async function ResultsBody() {
         </Card>
       )}
 
-      {groups.map((g) => {
-        const list = results.filter((r) => r.group === g && r.slug !== "thai-gov");
-        if (!list.length) return null;
+      {sections.map(({ group: { code: g }, lottos: list }) => {
         return (
           <section key={g} aria-labelledby={`r-${g}`}>
-            <SectionTitle id={`r-${g}`}>{t.lotto.groups[g]}</SectionTitle>
+            <SectionTitle id={`r-${g}`}>{labelOf(g)}</SectionTitle>
             <Card className="grid divide-y divide-line">
               {list.map((r) => (
                 <Link key={r.roundId} href={`/results/${r.slug}`} className="flex items-center gap-3 px-4 py-3 hover:bg-panel">
@@ -83,7 +84,7 @@ async function ResultsBody() {
               </Link>
             }
           >
-            {t.lotto.groups.yiki}
+            {labelOf("yiki")}
           </SectionTitle>
           <Card className="overflow-x-auto">
             <table className="w-full min-w-[420px] text-sm">

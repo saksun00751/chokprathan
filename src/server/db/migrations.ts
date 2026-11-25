@@ -725,6 +725,30 @@ export const MIGRATIONS: Migration[] = [
       "DROP TABLE IF EXISTS staff_roles",
     ],
   },
+  {
+    version: 10,
+    name: "lotto groups",
+    statements: [
+      // Managed in the back office. A built-in keeps an empty name until renamed, so the apps show their own label.
+      `CREATE TABLE IF NOT EXISTS lotto_groups (
+        code VARCHAR(40) NOT NULL PRIMARY KEY,
+        name VARCHAR(60) NOT NULL DEFAULT '',
+        i18n TEXT NOT NULL,
+        art VARCHAR(20) NOT NULL DEFAULT 'ticket',
+        sort INT NOT NULL DEFAULT 0,
+        updated_at BIGINT NOT NULL DEFAULT 0
+      ) ${T}`,
+      `INSERT IGNORE INTO lotto_groups (code, name, i18n, art, sort) VALUES
+        ('thai', '', '{}', 'ticket', 10), ('foreign', '', '{}', 'coins', 20), ('stock', '', '{}', 'chart', 30), ('yiki', '', '{}', 'balls', 40)`,
+      "ALTER TABLE lottos MODIFY grp VARCHAR(40) NOT NULL",
+    ],
+  },
+  {
+    version: 11,
+    name: "per-lottery automatic round creation",
+    // Off: the back office makes this lottery's rounds by hand.
+    statements: ["ALTER TABLE lottos ADD COLUMN IF NOT EXISTS auto_rounds TINYINT(1) NOT NULL DEFAULT 1"],
+  },
 ];
 
 /** A MariaDB string literal (only for the fixed, trusted text above). */
@@ -768,6 +792,7 @@ export const APP_TABLES = [
   "bills",
   "rounds",
   "lottos",
+  "lotto_groups",
   "rate_limits",
   "otps",
   "auth_log",
