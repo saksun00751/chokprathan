@@ -12,7 +12,7 @@ import { audit } from "./audit";
 import { settlePending } from "./settlement";
 import { getLotto, listLottos, type Lotto } from "./lottos";
 
-export type RoundStatus = "scheduled" | "resulted" | "cancelled";
+export type RoundStatus = "scheduled" | "pending_confirm" | "resulted" | "cancelled";
 export type RoundPhase = "upcoming" | "open" | "closed" | "resulted" | "cancelled";
 
 export interface Round {
@@ -120,7 +120,14 @@ export async function ensureRounds(now: number, { daysBack = 1, daysAhead = 1 } 
   if (planned.length === 0) return 0;
   const from = Math.min(...planned.map((p) => p.closesAt));
   const to = Math.max(...planned.map((p) => p.closesAt));
-  const existing = await q<{ lotto_id: number; closes_at: number }>("SELECT lotto_id, closes_at FROM rounds WHERE closes_at BETWEEN ? AND ?", from, to);
+  // A round closed early still occupies its planned time.
+  const existing = await q<{ lotto_id: number; closes_at: number }>(
+    "SELECT lotto_id, COALESCE(planned_close, closes_at) AS closes_at FROM rounds WHERE closes_at BETWEEN ? AND ? OR planned_close BETWEEN ? AND ?",
+    from,
+    to,
+    from,
+    to,
+  );
   const have = new Set(existing.map((r) => `${r.lotto_id}:${r.closes_at}`));
   const missing = planned.filter((p) => !have.has(`${p.lotto.id}:${p.closesAt}`));
   let inserted = 0;
@@ -163,6 +170,7 @@ export async function setResult(roundId: number, input: ResultInput, actorId: nu
     if (!locked) return { ok: false, error: e.rounds.notFound };
     if (locked.status === "cancelled") return { ok: false, error: e.rounds.cancelled };
     if (locked.status === "resulted") return { ok: false, error: e.rounds.resulted };
+    if (locked.status !== "scheduled") return { ok: false, error: e.rounds.resulted };
     if (now < locked.closes_at) return { ok: false, error: e.rounds.notClosed };
     await run(
       "UPDATE rounds SET status = 'resulted', result = ?, resulted_at = ?, resulted_by = ? WHERE id = ?",

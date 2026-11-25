@@ -834,6 +834,45 @@ export const MIGRATIONS: Migration[] = [
       "ALTER TABLE bill_items ADD COLUMN IF NOT EXISTS discount BIGINT NOT NULL DEFAULT 0",
     ],
   },
+  {
+    version: 14,
+    name: "two-person results and settlement runs",
+    statements: [
+      // pending_confirm: a result was typed and waits for a second person. planned_close: the scheduled close of a round closed early.
+      "ALTER TABLE rounds MODIFY status ENUM('scheduled','pending_confirm','resulted','cancelled') NOT NULL DEFAULT 'scheduled'",
+      "ALTER TABLE rounds ADD COLUMN IF NOT EXISTS planned_close BIGINT NULL",
+      `CREATE TABLE IF NOT EXISTS round_results (
+        id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        round_id INT NOT NULL,
+        kind ENUM('result','correction','cancel') NOT NULL DEFAULT 'result',
+        result TEXT NULL,
+        status ENUM('pending','confirmed','rejected','superseded') NOT NULL DEFAULT 'pending',
+        entered_by INT NULL,
+        entered_at BIGINT NOT NULL,
+        confirmed_by INT NULL,
+        confirmed_at BIGINT NULL,
+        reason VARCHAR(255) NULL,
+        KEY round_results_round (round_id, status),
+        CONSTRAINT round_results_round_fk FOREIGN KEY (round_id) REFERENCES rounds (id) ON DELETE CASCADE
+      ) ${T}`,
+      `CREATE TABLE IF NOT EXISTS settlement_runs (
+        id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        round_id INT NOT NULL,
+        round_result_id BIGINT NULL,
+        kind ENUM('result','cancel') NOT NULL,
+        status ENUM('running','done','mismatch') NOT NULL DEFAULT 'running',
+        report TEXT NULL,
+        created_at BIGINT NOT NULL,
+        finished_at BIGINT NULL,
+        KEY settlement_runs_round (round_id, id),
+        CONSTRAINT settlement_runs_round_fk FOREIGN KEY (round_id) REFERENCES rounds (id) ON DELETE CASCADE
+      ) ${T}`,
+      "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS run_id BIGINT NULL",
+      "ALTER TABLE transactions ADD KEY IF NOT EXISTS transactions_run (run_id)",
+      "ALTER TABLE bills ADD COLUMN IF NOT EXISTS settlement_run_id BIGINT NULL",
+      "ALTER TABLE bills ADD KEY IF NOT EXISTS bills_run (settlement_run_id)",
+    ],
+  },
 ];
 
 /** A MariaDB string literal (only for the fixed, trusted text above). */
@@ -875,6 +914,8 @@ export const APP_TABLES = [
   "exposures",
   "bill_items",
   "bills",
+  "settlement_runs",
+  "round_results",
   "round_configs",
   "lotto_rate_overrides",
   "lotto_packages",
