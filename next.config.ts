@@ -58,8 +58,6 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
-      // Back-office pages are dynamic (Next.js already sends no-store); keep them out of search engines too.
-      { source: "/admin/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
     ];
   },
   turbopack: {

@@ -11,18 +11,15 @@ import { errorsT } from "@/i18n/server";
 import type { ActionResult } from "@/lib/action";
 import { q1 } from "@/server/db";
 import { clientInfo } from "@/server/request";
-import { staffNext, type Door } from "@/domain/doors";
 import {
   authLog,
   checkLogin,
-  completeLoginChallenge,
-  createLoginChallenge,
   createSession,
   issueOtp,
   registerMember,
   resetPassword,
   revokeSession,
-  sessionCookieName,
+  SESSION_COOKIE,
   userFromToken,
   verifyOtp,
   type OtpPurpose,
@@ -34,10 +31,9 @@ import { clearSessionCookie, setSessionCookie } from "@/server/session";
 import { sendSms, smsConfigured } from "@/server/sms";
 
 const REF_COOKIE = "cp_ref";
-const CHALLENGE_COOKIE = "cp_2fa";
 const PHONE = /^0[689]\d{8}$/;
 
-/** Where a member goes after signing in: a customer-site page, never the login page or the back office. */
+/** Where a member goes after signing in: a customer-site page, never the login page or the old back-office addresses. */
 function safeNext(value: unknown): string {
   const s = typeof value === "string" ? value : "";
   const ok = /^\/(?![/\\])[\w\-./?=&%#]*$/.test(s) && !/^\/(login|admin|console)(?:[/?#]|$)/.test(s);
@@ -52,19 +48,19 @@ async function otpMode(): Promise<"sms" | "screen" | "off"> {
   return "off";
 }
 
-export type LoginState = { error?: string; identifier?: string; challenge?: boolean };
+export type LoginState = { error?: string; identifier?: string };
 
-async function startSession(userId: number, door: Door, next: string) {
+async function startSession(userId: number, next: string) {
   const client = await clientInfo();
-  const { token, expiresAt, replaced } = await createSession(userId, door, client);
-  await setSessionCookie(token, expiresAt, door);
+  const { token, expiresAt, replaced } = await createSession(userId, "member", client);
+  await setSessionCookie(token, expiresAt);
   await authLog("login", userId, null, client);
   // One session per account: this sign-in just signed another device out.
   if (replaced > 0) await authLog("session_replaced", userId, null, client);
-  redirect(door === "staff" ? staffNext(next) : next);
+  redirect(next);
 }
 
-/** Customer sign-in (/login): members only. Staff accounts are unknown here and sign in on /console. */
+/** Customer sign-in (/login): members only. Staff accounts are unknown here and sign in on the back-office app. */
 export async function loginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const identifier = String(formData.get("identifier") ?? "")
     .trim()
@@ -78,7 +74,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
   const burst = await limitShared(`login:ip:${client.ip ?? "?"}`, 40, 10 * 60_000);
   if (!burst.ok) return { error: fmt(e.auth.loginBurst, { wait: retryText(burst.retryAfterMs, e) }), identifier };
 
-  const result = await checkLogin(identifier, password, client, Date.now(), "member");
+  const result = await checkLogin(identifier, password, client, Date.now());
   if (!result.ok) return { error: result.error, identifier };
   // A blocked account, phone, or name cannot sign in (checked after the password, so the blocklist cannot be probed).
   const who = await memberIdentity(result.userId);
@@ -86,79 +82,25 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     await authLog("login_blocked", result.userId, identifier, client);
     return { error: e.auth.accountBlocked, identifier };
   }
-  await startSession(result.userId, "member", next);
+  await startSession(result.userId, next);
   return {};
 }
 
-/** Back-office sign-in (/console): staff only, with the authenticator step when it is turned on. */
-export async function consoleLoginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
-  const identifier = String(formData.get("identifier") ?? "")
-    .trim()
-    .slice(0, 100);
-  const password = String(formData.get("password") ?? "").slice(0, 200);
-  const next = staffNext(formData.get("next"));
-  const e = await errorsT();
-  if (!identifier || !password) return { error: e.auth.loginMissing, identifier };
-
-  const client = await clientInfo();
-  const burst = await limitShared(`console:ip:${client.ip ?? "?"}`, 20, 10 * 60_000);
-  if (!burst.ok) return { error: fmt(e.auth.loginBurst, { wait: retryText(burst.retryAfterMs, e) }), identifier };
-
-  const result = await checkLogin(identifier, password, client, Date.now(), "staff");
-  if (!result.ok) return { error: result.error, identifier };
-  if (result.needsTotp) {
-    const { token, expiresAt } = await createLoginChallenge(result.userId, next);
-    (await cookies()).set(CHALLENGE_COOKIE, token, {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      expires: new Date(expiresAt),
-    });
-    return { challenge: true, identifier };
-  }
-  await startSession(result.userId, "staff", next);
-  return {};
-}
-
-export type TotpState = { error?: string; expired?: boolean };
-
-export async function verifyLoginCodeAction(_prev: TotpState, formData: FormData): Promise<TotpState> {
+async function signOut() {
   const jar = await cookies();
-  const token = jar.get(CHALLENGE_COOKIE)?.value;
-  if (!token) return { error: (await errorsT()).auth.challengeExpired, expired: true };
-  const client = await clientInfo();
-  const r = await completeLoginChallenge(token, String(formData.get("code") ?? ""), client);
-  if (!r.ok) {
-    if (r.expired) jar.delete(CHALLENGE_COOKIE);
-    return { error: r.error, expired: r.expired };
-  }
-  jar.delete(CHALLENGE_COOKIE);
-  await startSession(r.userId, "staff", staffNext(r.next));
-  return {};
-}
-
-async function signOut(door: Door) {
-  const jar = await cookies();
-  const token = jar.get(sessionCookieName(door))?.value;
+  const token = jar.get(SESSION_COOKIE)?.value;
   if (token) {
     const viewer = await userFromToken(token);
     await revokeSession(token);
     if (viewer) await authLog("logout", viewer.id, null, await clientInfo());
   }
-  await clearSessionCookie(door);
+  await clearSessionCookie();
 }
 
 /** Member sign-out (customer site). */
 export async function logoutAction() {
-  await signOut("member");
+  await signOut();
   redirect("/");
-}
-
-/** Staff sign-out (back office): back to the console sign-in. */
-export async function staffLogoutAction() {
-  await signOut("staff");
-  redirect("/console");
 }
 
 /* ---------- registration ---------- */
@@ -252,7 +194,7 @@ export async function registerAction(input: RegisterInput): Promise<ActionResult
     return { ok: false, error: result.error, fieldErrors: result.field ? { [result.field]: result.error } : undefined };
   }
   const { token, expiresAt } = await createSession(result.userId, "member", client);
-  await setSessionCookie(token, expiresAt, "member");
+  await setSessionCookie(token, expiresAt);
   await authLog("login", result.userId, v.phone, client);
   (await cookies()).delete(REF_COOKIE);
   return { ok: true };
@@ -313,6 +255,6 @@ export async function resetPasswordAction(phone: string, password: string, confi
   const who = await memberIdentity(r.userId);
   if (who && (await isBlocked(who))) return { ok: false, error: e.auth.accountBlocked };
   const { token, expiresAt } = await createSession(r.userId, "member", client);
-  await setSessionCookie(token, expiresAt, "member");
+  await setSessionCookie(token, expiresAt);
   return { ok: true };
 }

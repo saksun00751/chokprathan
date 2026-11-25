@@ -1,14 +1,10 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { q1, run } from "@/server/db";
-import { totpAt, stepOf, newTotpSecret } from "@/server/totp";
 import { hasTestDb, resetDb } from "@/test/db";
 import {
-  STAFF_IDLE_TTL,
   checkLogin,
-  completeLoginChallenge,
-  createLoginChallenge,
   createSession,
-  enableTotp,
+  hashPassword,
   issueOtp,
   registerMember,
   revokeAllSessions,
@@ -18,7 +14,6 @@ import {
   userFromToken,
   verifyOtp,
 } from "./auth";
-import { createStaff } from "./staff";
 
 const now = Date.UTC(2026, 10, 4, 5, 0);
 const client = { ip: "203.0.113.7", userAgent: "vitest" };
@@ -34,10 +29,6 @@ async function register(phone: string, refCode: string | null = null) {
   );
   if (!r.ok) throw new Error(r.error);
   return r.userId;
-}
-
-async function ownerRole() {
-  return (await run("INSERT INTO staff_roles (name, permissions, is_owner, created_at, updated_at) VALUES ('เจ้าของ', '[\"*\"]', 1, ?, ?)", now, now)).lastId;
 }
 
 describe.skipIf(!hasTestDb)("auth on MariaDB", () => {
@@ -104,29 +95,22 @@ describe.skipIf(!hasTestDb)("auth on MariaDB", () => {
       expect(await q1("SELECT event FROM auth_log WHERE event = 'login_failed'")).toEqual({ event: "login_failed" });
     });
 
+    test("a staff row in users cannot sign in as a member", async () => {
+      // The member login only knows members, whether the staff row is found by username or by phone.
+      const hash = await hashPassword("pw-12345");
+      await run(
+        "INSERT INTO users (id, username, phone, password_hash, name, role, ref_code, created_at) VALUES (900, 'boss', '0899999999', ?, 'Boss', 'staff', 'ZZZZZZ', 1)",
+        hash,
+      );
+      expect(await checkLogin("boss", "pw-12345", { ip: null, userAgent: null }, now)).toMatchObject({ ok: false });
+      expect(await checkLogin("0899999999", "pw-12345", { ip: null, userAgent: null }, now)).toMatchObject({ ok: false });
+    });
+
     test("five failures lock the identifier for 15 minutes", async () => {
       await register("0811111111");
       for (let i = 0; i < 5; i++) await checkLogin("0811111111", "wrong-pass", client, now + i);
       expect((await checkLogin("0811111111", "secret123", client, now + 10)).ok).toBe(false);
       expect((await checkLogin("0811111111", "secret123", client, now + 15 * 60_000 + 10)).ok).toBe(true);
-    });
-
-    test("staff with an authenticator app must pass the second step, and a code works once", async () => {
-      const role = await ownerRole();
-      const staff = await createStaff({ username: "owner", name: "เจ้าของ", password: "Passw0rd-long", roleId: role }, null, { now });
-      if (!staff.ok) throw new Error(staff.error);
-      const secret = newTotpSecret();
-      expect(await enableTotp(staff.id, secret, totpAt(secret, stepOf(now)), now)).toBe(true);
-
-      const later = now + 60_000;
-      const login = await checkLogin("owner", "Passw0rd-long", client, later, "staff");
-      expect(login).toMatchObject({ ok: true, role: "staff", needsTotp: true });
-      const { token } = await createLoginChallenge(staff.id, "/admin", later);
-      expect((await completeLoginChallenge(token, "000000", client, later)).ok).toBe(false);
-      const code = totpAt(secret, stepOf(later));
-      expect(await completeLoginChallenge(token, code, client, later)).toMatchObject({ ok: true, userId: staff.id, next: "/admin" });
-      const replay = await createLoginChallenge(staff.id, "/admin", later);
-      expect((await completeLoginChallenge(replay.token, code, client, later)).ok).toBe(false);
     });
   });
 
@@ -138,16 +122,6 @@ describe.skipIf(!hasTestDb)("auth on MariaDB", () => {
       expect(await userFromToken(token, expiresAt + 1)).toBeNull();
       await revokeSession(token);
       expect(await userFromToken(token, now)).toBeNull();
-    });
-
-    test("staff sessions carry permissions and end after two idle hours", async () => {
-      const role = await ownerRole();
-      const staff = await createStaff({ username: "owner", name: "เจ้าของ", password: "Passw0rd-long", roleId: role }, null, { now });
-      if (!staff.ok) throw new Error(staff.error);
-      const { token } = await createSession(staff.id, "staff", client, now);
-      const viewer = await userFromToken(token, now + 1000);
-      expect(viewer).toMatchObject({ role: "staff", isOwner: true, permissions: ["*"], mustChangePassword: true });
-      expect(await userFromToken(token, now + STAFF_IDLE_TTL + 2000)).toBeNull();
     });
 
     test("a suspended member's session stops working", async () => {
@@ -172,25 +146,18 @@ describe.skipIf(!hasTestDb)("auth on MariaDB", () => {
       expect(await sessionState(second.token, now + 61_000)).toEqual({ state: "active", role: "member" });
     });
 
-    test("security sign-outs and idle staff sessions are recorded with their own reason", async () => {
+    test("security sign-outs are recorded with their own reason", async () => {
       const id = await register("0811111111");
       const { token } = await createSession(id, "member", client, now);
       await revokeAllSessions(id, "revoked", now + 1000);
       expect(await sessionState(token, now + 2000)).toMatchObject({ state: "ended", reason: "revoked" });
-
-      const staff = await createStaff({ username: "owner", name: "เจ้าของ", password: "Passw0rd-long", roleId: await ownerRole() }, null, { now });
-      if (!staff.ok) throw new Error(staff.error);
-      const s = await createSession(staff.id, "staff", client, now);
-      expect(await sessionState(s.token, now + STAFF_IDLE_TTL + 1000)).toMatchObject({ state: "ended", reason: "idle" });
-      expect(await userFromToken(s.token, now + STAFF_IDLE_TTL + 2000)).toBeNull();
     });
 
     test("checking a session never keeps it alive", async () => {
-      const staff = await createStaff({ username: "owner", name: "เจ้าของ", password: "Passw0rd-long", roleId: await ownerRole() }, null, { now });
-      if (!staff.ok) throw new Error(staff.error);
-      const { token } = await createSession(staff.id, "staff", client, now);
+      const id = await register("0811111111");
+      const { token } = await createSession(id, "member", client, now);
       for (let m = 30; m <= 90; m += 30) expect((await sessionState(token, now + m * 60_000)).state).toBe("active");
-      expect(await userFromToken(token, now + STAFF_IDLE_TTL + 1000)).toBeNull();
+      expect(await q1("SELECT last_seen_at FROM sessions WHERE user_id = ?", id)).toEqual({ last_seen_at: now });
     });
 
     test("an unknown token simply counts as expired", async () => {
