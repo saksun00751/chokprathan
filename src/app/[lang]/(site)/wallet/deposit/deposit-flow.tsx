@@ -8,7 +8,7 @@ import { Countdown, ServerTimeSync } from "@/components/ui/clock";
 import { FormError } from "@/components/ui/field";
 import { Card } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
-import { formatBaht } from "@/domain/money";
+import { formatBaht } from "chokprathan-core/rules/money";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatNumber } from "@/i18n/format";
 import { bankName as bankFullName, bankShort } from "@/i18n/labels";

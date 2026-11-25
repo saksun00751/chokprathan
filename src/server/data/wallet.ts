@@ -1,7 +1,7 @@
 import "server-only";
 import { pointsOf } from "@/server/services/points";
 import { io } from "next/cache";
-import { dayKey, dayStartMs } from "@/domain/time";
+import { dayKey, dayStartMs } from "chokprathan-core/rules/time";
 import { lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { json, q, q1 } from "@/server/db";

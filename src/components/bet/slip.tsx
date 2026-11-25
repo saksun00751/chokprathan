@@ -1,8 +1,8 @@
 "use client";
 
 import { Trash2, X } from "lucide-react";
-import { BET_TYPE_ORDER } from "@/domain/betTypes";
-import { formatBaht, formatRate } from "@/domain/money";
+import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
+import { formatBaht, formatRate } from "chokprathan-core/rules/money";
 import { RateChip } from "@/components/ui/rate-chip";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatNumber } from "@/i18n/format";

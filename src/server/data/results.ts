@@ -1,7 +1,7 @@
 import "server-only";
 import { io } from "next/cache";
-import { betTypesFor } from "@/domain/betTypes";
-import type { BetTypeCode, RiskProfile } from "@/domain/types";
+import { betTypesFor } from "chokprathan-core/rules/betTypes";
+import type { BetTypeCode, RiskProfile } from "chokprathan-core/rules/types";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { memo } from "@/server/cache";

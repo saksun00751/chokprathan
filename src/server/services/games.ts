@@ -21,7 +21,7 @@ import {
   type StatusCode,
   type WireTxn,
 } from "@/domain/seamless";
-import { dayStartMs } from "@/domain/time";
+import { dayStartMs } from "chokprathan-core/rules/time";
 import { insertMany, json, q, q1, run, tolerateMissingTable, tx } from "@/server/db";
 import { ambCurrency, ambGames, ambLogin, ambPrefix, ambProducts, ambReady, type AmbGame } from "@/server/amb";
 import { isBlocked } from "./blocklist";

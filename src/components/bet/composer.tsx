@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { BookmarkPlus, Check, ChevronUp, Info, Keyboard, Grid3x3, ListChecks, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { BET_TYPE_ORDER } from "@/domain/betTypes";
-import { formatRate } from "@/domain/money";
-import { doubles, nineteenDoors, permutations, swipeBack, swipeFront, triples } from "@/domain/numbers";
-import type { BetTypeCode } from "@/domain/types";
+import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
+import { formatRate } from "chokprathan-core/rules/money";
+import { doubles, nineteenDoors, permutations, swipeBack, swipeFront, triples } from "chokprathan-core/rules/numbers";
+import type { BetTypeCode } from "chokprathan-core/rules/types";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatClock, formatDate, formatNumber } from "@/i18n/format";
 import { Button } from "@/components/ui/button";

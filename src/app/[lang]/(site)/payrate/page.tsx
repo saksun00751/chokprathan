@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { Flag } from "@/components/ui/flag";
 import { Card, PageHeader, SectionTitle, Skeleton } from "@/components/ui/primitives";
 import { byGroup } from "@/domain/lotto-groups";
-import { formatRate } from "@/domain/money";
+import { formatRate } from "chokprathan-core/rules/money";
 import { fmt, formatNumber } from "@/i18n/format";
 import { getI18n, pageMeta } from "@/i18n/rsc";
 import { getGroups } from "@/server/data/groups";

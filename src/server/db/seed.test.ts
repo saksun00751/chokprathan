@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "vitest";
-import { bkkMs } from "@/domain/time";
+import { bkkMs } from "chokprathan-core/rules/time";
 import { q, q1 } from "@/server/db";
 import { checkLogin } from "@/server/services/auth";
 import { roundLimits } from "@/server/services/risk";

@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { GuessGame } from "@/components/activities/guess-game";
 import { LuckyWheel } from "@/components/activities/lucky-wheel";
 import { Card, PageHeader, Skeleton } from "@/components/ui/primitives";
-import { formatBaht } from "@/domain/money";
+import { formatBaht } from "chokprathan-core/rules/money";
 import { fmt } from "@/i18n/format";
 import { getI18n } from "@/i18n/rsc";
 import { getActivitiesPage } from "@/server/data/activities";

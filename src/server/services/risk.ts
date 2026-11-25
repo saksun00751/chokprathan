@@ -1,6 +1,6 @@
 import "server-only";
-import { marginalRate100 } from "@/domain/pricing";
-import type { BetTypeCode, ManualLimit } from "@/domain/types";
+import { marginalRate100 } from "chokprathan-core/rules/pricing";
+import type { BetTypeCode, ManualLimit } from "chokprathan-core/rules/types";
 import { invalidate, memo } from "@/server/cache";
 import { ROUND_LIMITS_TTL_MS } from "@/server/cache-ttl";
 import { afterCommit, q, q1, run } from "@/server/db";

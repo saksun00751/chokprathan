@@ -1,7 +1,7 @@
 import "server-only";
 import { io } from "next/cache";
 import type { ArtKey } from "@/components/art/keys";
-import { formatRate } from "@/domain/money";
+import { formatRate } from "chokprathan-core/rules/money";
 import { fmt, formatDate } from "@/i18n/format";
 import { getI18n } from "@/i18n/rsc";
 import { q1 } from "@/server/db";

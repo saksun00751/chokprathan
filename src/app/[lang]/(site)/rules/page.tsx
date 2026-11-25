@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { Card, PageHeader, Skeleton } from "@/components/ui/primitives";
-import type { BetTypeCode } from "@/domain/types";
-import { formatBaht, formatRate, payoutOf } from "@/domain/money";
-import { priceStake } from "@/domain/pricing";
+import type { BetTypeCode } from "chokprathan-core/rules/types";
+import { formatBaht, formatRate, payoutOf } from "chokprathan-core/rules/money";
+import { priceStake } from "chokprathan-core/rules/pricing";
 import { fmt, formatNumber } from "@/i18n/format";
 import { getI18n, pageMeta } from "@/i18n/rsc";
 import { getRateTables } from "@/server/data/results";

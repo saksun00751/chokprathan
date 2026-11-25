@@ -1,6 +1,6 @@
 import "server-only";
 import { io } from "next/cache";
-import { dayKey, dayStartMs } from "@/domain/time";
+import { dayKey, dayStartMs } from "chokprathan-core/rules/time";
 import { lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { q, q1, tolerateMissingTable } from "@/server/db";

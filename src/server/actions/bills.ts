@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { BET_TYPE_ORDER } from "@/domain/betTypes";
+import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
 import { fmt } from "@/i18n/format";
 import { errorsT } from "@/i18n/server";
 import type { ActionResult } from "@/lib/action";

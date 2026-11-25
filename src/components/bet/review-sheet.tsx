@@ -2,8 +2,8 @@
 
 import { CircleAlert, CircleCheck, LoaderCircle, TriangleAlert } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
-import { BET_TYPE_ORDER } from "@/domain/betTypes";
-import { formatBaht, formatRate } from "@/domain/money";
+import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
+import { formatBaht, formatRate } from "chokprathan-core/rules/money";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Countdown } from "@/components/ui/clock";
 import { Sheet } from "@/components/ui/sheet";

@@ -1,4 +1,4 @@
-import type { BetTypeCode } from "@/domain/types";
+import type { BetTypeCode } from "chokprathan-core/rules/types";
 import type { BetConfigView } from "@/server/data/bet";
 import type { LimitBadge } from "@/server/services/risk";
 

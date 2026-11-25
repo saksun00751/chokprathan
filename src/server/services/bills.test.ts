@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { bkkMs } from "@/domain/time";
+import { bkkMs } from "chokprathan-core/rules/time";
 import { json, q, q1, run } from "@/server/db";
 import { hasTestDb, resetDb } from "@/test/db";
 import { cancelBill, placeBill, quoteBill, settleRound } from "./bills";

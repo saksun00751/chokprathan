@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { formatRate } from "@/domain/money";
+import { formatRate } from "chokprathan-core/rules/money";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatClock, formatDate } from "@/i18n/format";
 import { Countdown, UrgencyLabel } from "@/components/ui/clock";
