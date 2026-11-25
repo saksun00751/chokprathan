@@ -50,7 +50,7 @@ export async function settlePending(roundId: number, now = Date.now()): Promise<
 }
 
 /** What a paid bill entitled whom to, kept on the bill so a later correction can pay the difference. */
-type Entitlement = { bill: number; cashback: number; aff1User: number | null; aff1: number; aff2User: number | null; aff2: number };
+type Entitlement = { bill: number; cashback: number; aff1User: number | null; aff1: number; aff2User: number | null; aff2: number; turnover: number };
 
 async function recordEntitlements(rows: Entitlement[]) {
   if (rows.length === 0) return;
@@ -58,12 +58,13 @@ async function recordEntitlements(rows: Entitlement[]) {
   const column = (name: string) => `${name} = CASE id ${cases} END`;
   const values = (pick: (r: Entitlement) => number | null) => rows.flatMap((r) => [r.bill, pick(r)]);
   await run(
-    `UPDATE bills SET ${["cashback_paid", "aff1_user", "aff1_paid", "aff2_user", "aff2_paid"].map(column).join(", ")} WHERE id IN (?)`,
+    `UPDATE bills SET ${["cashback_paid", "aff1_user", "aff1_paid", "aff2_user", "aff2_paid", "turnover_taken"].map(column).join(", ")} WHERE id IN (?)`,
     ...values((r) => r.cashback),
     ...values((r) => r.aff1User),
     ...values((r) => r.aff1),
     ...values((r) => r.aff2User),
     ...values((r) => r.aff2),
+    ...values((r) => r.turnover),
     rows.map((r) => r.bill),
   );
 }
@@ -97,8 +98,8 @@ async function settleChunk(roundId: number, result: RoundResult | null, rewards:
     }
   }
   // Lock every wallet this chunk touches, in id order (the order every other writer uses too).
-  const locked = await q<{ id: number; balance: number; cashback_balance: number; affiliate_balance: number }>(
-    "SELECT id, balance, cashback_balance, affiliate_balance FROM users WHERE id IN (?) ORDER BY id FOR UPDATE",
+  const locked = await q<{ id: number; balance: number; cashback_balance: number; affiliate_balance: number; turnover_required: number }>(
+    "SELECT id, balance, cashback_balance, affiliate_balance, turnover_required FROM users WHERE id IN (?) ORDER BY id FOR UPDATE",
     [...involved].sort((a, b) => a - b),
   );
   const wallets = new Map<number, Wallets>(locked.map((u) => [u.id, { balance: u.balance, cashback: u.cashback_balance, affiliate: u.affiliate_balance }]));
@@ -115,6 +116,8 @@ async function settleChunk(roundId: number, result: RoundResult | null, rewards:
   };
 
   const entitled: Entitlement[] = [];
+  // What each member still has to play through, counted down bill by bill.
+  const toPlay = new Map(locked.map((u) => [u.id, u.turnover_required]));
   const itemsByBill = new Map<number, ItemRow[]>();
   for (const it of itemRows) itemsByBill.set(it.bill_id, [...(itemsByBill.get(it.bill_id) ?? []), it]);
 
@@ -156,7 +159,9 @@ async function settleChunk(roundId: number, result: RoundResult | null, rewards:
         if (uplineId) credit(uplineId, "affiliate", amount, "aff_earn", b.code, `ค่าแนะนำจาก ${maskPhone(owner?.phone)}`);
         return amount;
       });
-      entitled.push({ bill: b.id, cashback, aff1User: owner?.upline1_id ?? null, aff1, aff2User: owner?.upline2_id ?? null, aff2 });
+      const turnover = Math.min(b.total_stake, toPlay.get(b.user_id) ?? 0);
+      toPlay.set(b.user_id, (toPlay.get(b.user_id) ?? 0) - turnover);
+      entitled.push({ bill: b.id, cashback, aff1User: owner?.upline1_id ?? null, aff1, aff2User: owner?.upline2_id ?? null, aff2, turnover });
       const d = deltas.get(b.user_id) ?? { balance: 0, cashback: 0, affiliate: 0, turnover: 0 };
       d.turnover += b.total_stake;
       deltas.set(b.user_id, d);
@@ -175,7 +180,7 @@ async function settleChunk(roundId: number, result: RoundResult | null, rewards:
   }
 
   // A cancelled round entitles nobody to anything beyond the refund.
-  if (!result) entitled.push(...chunk.map((b) => ({ bill: b.id, cashback: 0, aff1User: null, aff1: 0, aff2User: null, aff2: 0 })));
+  if (!result) entitled.push(...chunk.map((b) => ({ bill: b.id, cashback: 0, aff1User: null, aff1: 0, aff2User: null, aff2: 0, turnover: 0 })));
   await recordEntitlements(entitled);
   await insertMany("transactions", ["user_id", "wallet", "type", "amount", "balance_after", "ref", "note", "actor_id", "created_at"], ledger);
   await applyDeltas(deltas);
