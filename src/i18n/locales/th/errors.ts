@@ -96,6 +96,8 @@ export const errors = {
     depositMax: "ฝากได้สูงสุด {amount} บาทต่อครั้ง",
     noReceivingAccount: "ยังไม่ได้ตั้งค่าบัญชีรับเงิน กรุณาติดต่อเจ้าหน้าที่",
     alreadyProcessed: "รายการนี้ดำเนินการไปแล้ว",
+    debtOwed: "มียอดค้างชำระ {amount} บาท ยังถอนเงินไม่ได้",
+    debtBlocks: "สมาชิกมียอดค้างชำระ {amount} บาท อนุมัติถอนไม่ได้",
     depositExpired: "รายการหมดเวลา กรุณาสร้างรายการฝากใหม่",
     slipFirst: "แนบสลิปการโอนก่อนกดยืนยัน",
     withdrawMin: "ถอนขั้นต่ำ {amount} บาท",

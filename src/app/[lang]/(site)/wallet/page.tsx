@@ -32,7 +32,7 @@ export default async function WalletPage() {
 
 async function WalletBody() {
   const viewer = await requireViewer("/wallet");
-  const [{ withdrawals, deposits, recent, points, pointRule }, { lang, t }] = await Promise.all([getWalletOverview(viewer.id), getI18n()]);
+  const [{ debt, withdrawals, deposits, recent, points, pointRule }, { lang, t }] = await Promise.all([getWalletOverview(viewer.id), getI18n()]);
   const w_ = t.money.wallet;
   const pendingDeposits = deposits.filter((d) => d.status === "pending" || d.status === "awaiting");
   const pendingWithdrawals = withdrawals.filter((w) => w.status === "pending");
@@ -58,6 +58,12 @@ async function WalletBody() {
             </div>
           </div>
         </section>
+
+        {debt > 0 && (
+          <p role="status" className="rounded-control bg-danger-soft px-4 py-3 text-sm text-danger">
+            {fmt(w_.debt, { amount: `฿${formatBaht(debt)}` })}
+          </p>
+        )}
 
         {viewer.turnoverRequired > 0 && (
           <p className="flex items-start gap-2.5 rounded-control bg-warning-soft px-4 py-3 text-sm text-warning">

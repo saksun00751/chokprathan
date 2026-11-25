@@ -15,6 +15,7 @@ export const money: typeof th = {
     deposit: "Deposit",
     withdraw: "Withdraw",
     turnover: "Bet {amount} more to clear your promotion bonus before you can withdraw.",
+    debt: "You owe {amount} after a result correction. Money coming in repays it first, and withdrawals are paused.",
     cashbackWallet: "Cashback wallet",
     claimToMain: "Move to main wallet",
     affiliateWallet: "Referral wallet",

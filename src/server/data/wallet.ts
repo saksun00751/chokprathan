@@ -1,10 +1,11 @@
 import "server-only";
+import { outstandingDebt } from "chokprathan-core/wallet/debt";
 import { pointsOf } from "@/server/services/points";
 import { io } from "next/cache";
 import { dayKey, dayStartMs } from "chokprathan-core/rules/time";
 import { lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
-import { json, q, q1 } from "@/server/db";
+import { json, q, q1, run } from "@/server/db";
 import { depositsForUser, type WithdrawalRow } from "@/server/services/finance";
 import { getSetting, getSettings } from "@/server/services/settings";
 import { receivingAccount } from "@/server/services/banks";
@@ -24,7 +25,7 @@ export interface TxRow {
 export type TxFilter = "all" | "money" | "bets" | "rewards";
 const TX_SQL: Record<TxFilter, string> = {
   all: "",
-  money: "AND type IN ('deposit','withdraw','withdraw_refund','bonus','voucher','adjust')",
+  money: "AND type IN ('deposit','withdraw','withdraw_refund','bonus','voucher','adjust','debt_repay')",
   bets: "AND type IN ('bet','win','refund')",
   rewards: "AND type IN ('cashback_claim','aff_transfer','bonus','voucher','game')",
 };
@@ -54,14 +55,15 @@ export async function getTransactions(userId: number, filter: TxFilter = "all", 
 
 export async function getWalletOverview(userId: number) {
   await io();
-  const [withdrawals, deposits, recent, points, pointRule] = await Promise.all([
+  const [debt, withdrawals, deposits, recent, points, pointRule] = await Promise.all([
+    outstandingDebt({ q, q1, run }, userId),
     q<WithdrawalRow>("SELECT * FROM withdrawals WHERE user_id = ? ORDER BY created_at DESC LIMIT 5", userId),
     depositsForUser(userId, 5),
     getTransactions(userId, "all", 8),
     pointsOf(userId, 5),
     getSetting("points"),
   ]);
-  return { withdrawals, deposits, recent, points, pointRule };
+  return { debt, withdrawals, deposits, recent, points, pointRule };
 }
 
 export async function getDepositPage(userId: number) {

@@ -97,6 +97,8 @@ export const errors: typeof th = {
     depositMax: "Maximum deposit is {amount} baht each time",
     noReceivingAccount: "No receiving account is set up yet. Please contact staff.",
     alreadyProcessed: "This item has already been processed",
+    debtOwed: "You owe ฿{amount}, so withdrawals are not possible yet",
+    debtBlocks: "The member owes ฿{amount}; the withdrawal cannot be approved",
     depositExpired: "This deposit has expired. Please create a new one.",
     slipFirst: "Attach the transfer slip before confirming",
     withdrawMin: "Minimum withdrawal is {amount} baht",

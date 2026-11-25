@@ -97,6 +97,8 @@ export const errors: typeof th = {
     depositMax: "ដាក់បានអតិបរមា {amount} បាតក្នុងមួយដង",
     noReceivingAccount: "មិនទាន់កំណត់គណនីទទួលប្រាក់ សូមទាក់ទងបុគ្គលិក",
     alreadyProcessed: "ប្រតិបត្តិការនេះបានដំណើរការរួចហើយ",
+    debtOwed: "អ្នកជំពាក់ ฿{amount} ដូច្នេះមិនទាន់អាចដកប្រាក់បានទេ",
+    debtBlocks: "សមាជិកជំពាក់ ฿{amount} មិនអាចអនុម័តការដកប្រាក់បានទេ",
     depositExpired: "ការដាក់ប្រាក់នេះផុតកំណត់ សូមបង្កើតថ្មី",
     slipFirst: "ភ្ជាប់វិក្កយបត្រផ្ទេរប្រាក់មុនពេលចុចបញ្ជាក់",
     withdrawMin: "ដកអប្បបរមា {amount} បាត",

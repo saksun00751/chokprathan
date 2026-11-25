@@ -97,6 +97,8 @@ export const errors: typeof th = {
     depositMax: "ຝາກໄດ້ສູງສຸດ {amount} ບາດຕໍ່ຄັ້ງ",
     noReceivingAccount: "ຍັງບໍ່ໄດ້ຕັ້ງຄ່າບັນຊີຮັບເງິນ ກະລຸນາຕິດຕໍ່ພະນັກງານ",
     alreadyProcessed: "ລາຍການນີ້ດຳເນີນການໄປແລ້ວ",
+    debtOwed: "ມີຍອດຄ້າງຊຳລະ {amount} ບາດ ຍັງຖອນເງິນບໍ່ໄດ້",
+    debtBlocks: "ສະມາຊິກມີຍອດຄ້າງ {amount} ບາດ ອະນຸມັດຖອນບໍ່ໄດ້",
     depositExpired: "ລາຍການໝົດເວລາ ກະລຸນາສ້າງລາຍການຝາກໃໝ່",
     slipFirst: "ແນບສະລິບການໂອນກ່ອນກົດຢືນຢັນ",
     withdrawMin: "ຖອນຂັ້ນຕ່ຳ {amount} ບາດ",

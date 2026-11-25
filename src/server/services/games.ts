@@ -1,4 +1,5 @@
 import "server-only";
+import { collectDebt } from "chokprathan-core/wallet/debt";
 import { randomUUID } from "node:crypto";
 import { ambUsername, groupOf, productName, userIdOf } from "@/domain/game-products";
 import {
@@ -239,7 +240,10 @@ export async function handleCallback(action: Callback, body: unknown, now = Date
     const txns = parseTxns(b.txns);
     if (!txns) return reply(SC.forbidden);
     const requestId = str(b.id, 80) ?? null;
-    return await tx(async () => {
+    // satang the callback added to the balance
+    let credited = 0;
+    const answer = await tx(async () => {
+      credited = 0;
       const u = await q1<UserRow>(
         "SELECT id, role, status, balance, phone, name, bank_code, bank_account, bank_name FROM users WHERE id = ? FOR UPDATE",
         userId,
@@ -252,9 +256,19 @@ export async function handleCallback(action: Callback, body: unknown, now = Date
       }
       const snap = await snapshotFor(userId, productId, txns, balance);
       const out = ENGINE[action](snap, txns);
-      if (out.code === SC.ok) await persist(userId, productId, snap, out, requestId, now);
+      if (out.code === SC.ok) {
+        await persist(userId, productId, snap, out, requestId, now);
+        credited = out.balanceAfter - out.balanceBefore;
+      }
       return reply(out.code, { balanceBefore: toBaht(out.balanceBefore), balanceAfter: toBaht(out.balanceAfter) });
     });
+    // After the callback is committed, so the figures the provider is given stay its own.
+    if (credited > 0) {
+      await tx(() => collectDebt({ q, q1, run }, userId, "balance", credited, now)).catch((error) =>
+        console.error("[games] debt collection failed:", error instanceof Error ? error.message : error),
+      );
+    }
+    return answer;
   } catch (error) {
     if (error instanceof Collision) return reply(SC.duplicate);
     if (!notMigrated(error)) console.error("[games] callback failed:", action, error instanceof Error ? error.message : error);

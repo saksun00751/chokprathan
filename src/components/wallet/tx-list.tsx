@@ -24,6 +24,7 @@ const ICON: Record<string, LucideIcon> = {
   deposit: ArrowDownToLine,
   withdraw: ArrowUpFromLine,
   withdraw_refund: RotateCcw,
+  debt_repay: HandCoins,
   bet: Ticket,
   win: Trophy,
   refund: RotateCcw,
