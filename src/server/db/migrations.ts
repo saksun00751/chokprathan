@@ -873,6 +873,46 @@ export const MIGRATIONS: Migration[] = [
       "ALTER TABLE bills ADD KEY IF NOT EXISTS bills_run (settlement_run_id)",
     ],
   },
+  {
+    version: 15,
+    name: "member debts and per-bill entitlements",
+    statements: [
+      // What this bill's payout entitled whom to, so a correction can pay the difference. NULL: paid before this existed.
+      `ALTER TABLE bills
+        ADD COLUMN IF NOT EXISTS cashback_paid BIGINT NULL,
+        ADD COLUMN IF NOT EXISTS aff1_user INT NULL,
+        ADD COLUMN IF NOT EXISTS aff1_paid BIGINT NULL,
+        ADD COLUMN IF NOT EXISTS aff2_user INT NULL,
+        ADD COLUMN IF NOT EXISTS aff2_paid BIGINT NULL`,
+      // The reward rates a run paid with.
+      "ALTER TABLE settlement_runs ADD COLUMN IF NOT EXISTS rewards TEXT NULL",
+      "ALTER TABLE settlement_runs MODIFY kind ENUM('result','cancel','correction','void') NOT NULL",
+      `CREATE TABLE IF NOT EXISTS member_debts (
+        id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        round_id INT NULL,
+        run_id BIGINT NULL,
+        amount BIGINT NOT NULL,
+        outstanding BIGINT NOT NULL,
+        created_at BIGINT NOT NULL,
+        written_off BIGINT NOT NULL DEFAULT 0,
+        written_off_by INT NULL,
+        written_off_at BIGINT NULL,
+        reason VARCHAR(255) NULL,
+        KEY member_debts_user (user_id, outstanding),
+        CONSTRAINT member_debts_ok CHECK (amount > 0 AND outstanding >= 0 AND outstanding <= amount),
+        CONSTRAINT member_debts_user_fk FOREIGN KEY (user_id) REFERENCES users (id)
+      ) ${T}`,
+      // One row per member a correction has finished, so an interrupted run resumes without paying twice.
+      `CREATE TABLE IF NOT EXISTS correction_members (
+        run_id BIGINT NOT NULL,
+        user_id INT NOT NULL,
+        applied_at BIGINT NOT NULL,
+        PRIMARY KEY (run_id, user_id),
+        CONSTRAINT correction_members_run_fk FOREIGN KEY (run_id) REFERENCES settlement_runs (id) ON DELETE CASCADE
+      ) ${T}`,
+    ],
+  },
 ];
 
 /** A MariaDB string literal (only for the fixed, trusted text above). */
@@ -914,6 +954,8 @@ export const APP_TABLES = [
   "exposures",
   "bill_items",
   "bills",
+  "correction_members",
+  "member_debts",
   "settlement_runs",
   "round_results",
   "round_configs",
