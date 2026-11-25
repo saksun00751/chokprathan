@@ -749,6 +749,77 @@ export const MIGRATIONS: Migration[] = [
     // Off: the back office makes this lottery's rounds by hand.
     statements: ["ALTER TABLE lottos ADD COLUMN IF NOT EXISTS auto_rounds TINYINT(1) NOT NULL DEFAULT 1"],
   },
+  {
+    version: 12,
+    name: "price packages and round configs",
+    // Additive only: lottos.rates / limits / risk stay until betting reads round_configs.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS price_packages (
+        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        code VARCHAR(40) NOT NULL,
+        name VARCHAR(60) NOT NULL,
+        active TINYINT(1) NOT NULL DEFAULT 1,
+        sort INT NOT NULL DEFAULT 0,
+        updated_at BIGINT NOT NULL,
+        UNIQUE KEY price_packages_code (code)
+      ) ${T}`,
+      `CREATE TABLE IF NOT EXISTS package_rates (
+        package_id INT NOT NULL,
+        bet_type VARCHAR(10) NOT NULL,
+        rate100 INT NOT NULL,
+        discount_bp INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (package_id, bet_type),
+        CONSTRAINT package_rates_ok CHECK (rate100 > 0 AND discount_bp BETWEEN 0 AND 9999),
+        CONSTRAINT package_rates_fk FOREIGN KEY (package_id) REFERENCES price_packages (id) ON DELETE CASCADE
+      ) ${T}`,
+      `CREATE TABLE IF NOT EXISTS risk_profiles (
+        id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        code VARCHAR(60) NOT NULL,
+        name VARCHAR(60) NOT NULL,
+        profile TEXT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        UNIQUE KEY risk_profiles_code (code)
+      ) ${T}`,
+      `CREATE TABLE IF NOT EXISTS lotto_bet_types (
+        lotto_id INT NOT NULL,
+        bet_type VARCHAR(10) NOT NULL,
+        enabled TINYINT(1) NOT NULL DEFAULT 1,
+        min_stake INT NOT NULL,
+        max_per_number INT NOT NULL,
+        risk_profile_id INT NOT NULL,
+        PRIMARY KEY (lotto_id, bet_type),
+        CONSTRAINT lotto_bet_types_lotto_fk FOREIGN KEY (lotto_id) REFERENCES lottos (id) ON DELETE CASCADE,
+        CONSTRAINT lotto_bet_types_risk_fk FOREIGN KEY (risk_profile_id) REFERENCES risk_profiles (id)
+      ) ${T}`,
+      `CREATE TABLE IF NOT EXISTS lotto_packages (
+        lotto_id INT NOT NULL,
+        package_id INT NOT NULL,
+        PRIMARY KEY (lotto_id, package_id),
+        CONSTRAINT lotto_packages_lotto_fk FOREIGN KEY (lotto_id) REFERENCES lottos (id) ON DELETE CASCADE,
+        CONSTRAINT lotto_packages_package_fk FOREIGN KEY (package_id) REFERENCES price_packages (id) ON DELETE CASCADE
+      ) ${T}`,
+      `CREATE TABLE IF NOT EXISTS lotto_rate_overrides (
+        lotto_id INT NOT NULL,
+        package_id INT NOT NULL,
+        bet_type VARCHAR(10) NOT NULL,
+        rate100 INT NULL,
+        discount_bp INT NULL,
+        PRIMARY KEY (lotto_id, package_id, bet_type),
+        CONSTRAINT lotto_rate_overrides_ok CHECK ((rate100 IS NULL OR rate100 > 0) AND (discount_bp IS NULL OR discount_bp BETWEEN 0 AND 9999)),
+        CONSTRAINT lotto_rate_overrides_lotto_fk FOREIGN KEY (lotto_id) REFERENCES lottos (id) ON DELETE CASCADE,
+        CONSTRAINT lotto_rate_overrides_package_fk FOREIGN KEY (package_id) REFERENCES price_packages (id) ON DELETE CASCADE
+      ) ${T}`,
+      `CREATE TABLE IF NOT EXISTS round_configs (
+        round_id INT NOT NULL,
+        version INT NOT NULL,
+        config MEDIUMTEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        created_by INT NULL,
+        PRIMARY KEY (round_id, version),
+        CONSTRAINT round_configs_round_fk FOREIGN KEY (round_id) REFERENCES rounds (id) ON DELETE CASCADE
+      ) ${T}`,
+    ],
+  },
 ];
 
 /** A MariaDB string literal (only for the fixed, trusted text above). */
@@ -790,9 +861,16 @@ export const APP_TABLES = [
   "exposures",
   "bill_items",
   "bills",
+  "round_configs",
+  "lotto_rate_overrides",
+  "lotto_packages",
+  "lotto_bet_types",
   "rounds",
   "lottos",
   "lotto_groups",
+  "package_rates",
+  "price_packages",
+  "risk_profiles",
   "rate_limits",
   "otps",
   "auth_log",
