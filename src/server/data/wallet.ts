@@ -26,7 +26,7 @@ export type TxFilter = "all" | "money" | "bets" | "rewards";
 const TX_SQL: Record<TxFilter, string> = {
   all: "",
   money: "AND type IN ('deposit','withdraw','withdraw_refund','bonus','voucher','adjust','debt_repay')",
-  bets: "AND type IN ('bet','win','refund')",
+  bets: "AND type IN ('bet','win','refund','win_correction')",
   rewards: "AND type IN ('cashback_claim','aff_transfer','bonus','voucher','game')",
 };
 
@@ -37,7 +37,7 @@ export async function getTransactions(userId: number, filter: TxFilter = "all", 
   const rows = await q<Omit<TxRow, "detail"> & { slug: string | null; short_name: string | null; round_no: number | null; closes_at: number | null }>(
     `SELECT t.id, t.wallet, t.type, t.amount, t.balance_after, t.ref, t.created_at, l.slug, l.short_name, r.round_no, r.closes_at
      FROM (SELECT * FROM transactions WHERE user_id = ? AND wallet = 'balance' ${TX_SQL[filter]} ORDER BY created_at DESC, id DESC LIMIT ?) t
-     LEFT JOIN bills b ON b.code = t.ref AND t.type IN ('bet','win','refund')
+     LEFT JOIN bills b ON b.code = t.ref AND t.type IN ('bet','win','refund','win_correction')
      LEFT JOIN rounds r ON r.id = b.round_id
      LEFT JOIN lottos l ON l.id = r.lotto_id
      ORDER BY t.created_at DESC, t.id DESC`,

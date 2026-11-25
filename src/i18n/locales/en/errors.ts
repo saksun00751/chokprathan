@@ -99,6 +99,7 @@ export const errors: typeof th = {
     alreadyProcessed: "This item has already been processed",
     debtOwed: "You owe ฿{amount}, so withdrawals are not possible yet",
     debtBlocks: "The member owes ฿{amount}; the withdrawal cannot be approved",
+    correctionRunning: "A result correction involving this member is being applied; approve the withdrawal once it finishes",
     depositExpired: "This deposit has expired. Please create a new one.",
     slipFirst: "Attach the transfer slip before confirming",
     withdrawMin: "Minimum withdrawal is {amount} baht",

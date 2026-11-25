@@ -99,6 +99,7 @@ export const errors: typeof th = {
     alreadyProcessed: "ລາຍການນີ້ດຳເນີນການໄປແລ້ວ",
     debtOwed: "ມີຍອດຄ້າງຊຳລະ {amount} ບາດ ຍັງຖອນເງິນບໍ່ໄດ້",
     debtBlocks: "ສະມາຊິກມີຍອດຄ້າງ {amount} ບາດ ອະນຸມັດຖອນບໍ່ໄດ້",
+    correctionRunning: "ສະມາຊິກມີງວດທີ່ກຳລັງແກ້ຜົນຢູ່ ລໍໃຫ້ສຳເລັດກ່ອນອະນຸມັດຖອນ",
     depositExpired: "ລາຍການໝົດເວລາ ກະລຸນາສ້າງລາຍການຝາກໃໝ່",
     slipFirst: "ແນບສະລິບການໂອນກ່ອນກົດຢືນຢັນ",
     withdrawMin: "ຖອນຂັ້ນຕ່ຳ {amount} ບາດ",

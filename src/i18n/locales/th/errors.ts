@@ -98,6 +98,7 @@ export const errors = {
     alreadyProcessed: "รายการนี้ดำเนินการไปแล้ว",
     debtOwed: "มียอดค้างชำระ {amount} บาท ยังถอนเงินไม่ได้",
     debtBlocks: "สมาชิกมียอดค้างชำระ {amount} บาท อนุมัติถอนไม่ได้",
+    correctionRunning: "สมาชิกมีงวดที่กำลังแก้ผลอยู่ รอให้เสร็จก่อนอนุมัติถอน",
     depositExpired: "รายการหมดเวลา กรุณาสร้างรายการฝากใหม่",
     slipFirst: "แนบสลิปการโอนก่อนกดยืนยัน",
     withdrawMin: "ถอนขั้นต่ำ {amount} บาท",

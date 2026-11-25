@@ -91,7 +91,7 @@ async function affiliateTotals(userId: number) {
     `SELECT
        (SELECT SUM(b.total_stake) FROM bills b JOIN users u ON u.id = b.user_id WHERE u.upline1_id = ? AND b.status IN ('won','lost')) AS t1,
        (SELECT SUM(b.total_stake) FROM bills b JOIN users u ON u.id = b.user_id WHERE u.upline2_id = ? AND b.status IN ('won','lost')) AS t2,
-       (SELECT SUM(amount) FROM transactions WHERE user_id = ? AND wallet = 'affiliate' AND type = 'aff_earn') AS earned`,
+       (SELECT SUM(amount) FROM transactions WHERE user_id = ? AND wallet = 'affiliate' AND type IN ('aff_earn','aff_correction')) AS earned`,
     userId,
     userId,
     userId,
@@ -121,7 +121,7 @@ export async function downlines(userId: number, limit = 50) {
 export async function cashbackSummary(userId: number) {
   const r = (await q1<{ earned: number | null; claimed: number | null; balance: number | null }>(
     `SELECT
-       (SELECT SUM(amount) FROM transactions WHERE user_id = ? AND wallet = 'cashback' AND type = 'cashback_earn') AS earned,
+       (SELECT SUM(amount) FROM transactions WHERE user_id = ? AND wallet = 'cashback' AND type IN ('cashback_earn','cashback_correction')) AS earned,
        (SELECT SUM(amount) FROM transactions WHERE user_id = ? AND wallet = 'cashback' AND type = 'cashback_claim') AS claimed,
        (SELECT cashback_balance FROM users WHERE id = ?) AS balance`,
     userId,
