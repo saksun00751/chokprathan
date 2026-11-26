@@ -2,6 +2,19 @@ import type { play as th } from "../th/play";
 
 export const play: typeof th = {
   composer: {
+    package: "ແພັກເກັດ",
+    standard: "ມາດຕະຖານ",
+    discount: "ສ່ວນຫຼຸດ",
+    discountUpTo: "ຫຼຸດສູງສຸດ {percent}%",
+    packageGone: "ແພັກເກັດທີ່ເລືອກບໍ່ມີໃນງວດນີ້ແລ້ວ ປ່ຽນເປັນແພັກເກັດມາດຕະຖານ ກວດອັດຕາກ່ອນຢືນຢັນ",
+    switchTitle: "ປ່ຽນແພັກເກັດ",
+    switchBody: "ແພັກເກັດ {name} ບໍ່ຮັບ {n} ລາຍການລຸ່ມນີ້ ຖ້າປ່ຽນ ລາຍການເຫຼົ່ານີ້ຈະຖືກລຶບອອກຈາກໂພຍ",
+    switchConfirm: "ປ່ຽນ ແລະ ລຶບ",
+    switchKeep: "ບໍ່ປ່ຽນ",
+    typeSkipped: "ຂ້າມ {n} ລາຍການທີ່ແພັກເກັດນີ້ບໍ່ຮັບ",
+    notOpenNotice: "ງວດນີ້ຍັງບໍ່ເປີດຮັບ ເປີດຮັບ {time}",
+    pairs: { high: "ສູງ", low: "ຕ່ຳ", odd: "ຄີກ", even: "ຄູ່" },
+    paste: "ວາງຂໍ້ຄວາມໂພຍ",
     added: "ເພີ່ມ {n} ລາຍການ",
     addedSkipped: "ເພີ່ມ {n} ລາຍການ ຂ້າມ {skipped} ເລກທີ່ປິດຮັບ",
     alreadyIn: "ເລກນີ້ຢູ່ໃນໂພຍແລ້ວ",
@@ -59,6 +72,15 @@ export const play: typeof th = {
     setName: "ຊື່ຊຸດເລກ",
     setNamePlaceholder: "ເຊັ່ນ ເລກທະບຽນລົດ",
   },
+  paste: {
+    title: "ວາງຂໍ້ຄວາມໂພຍ",
+    hint: "ແຖວລະລາຍການ: ເລກ = ຈຳນວນເງິນ ຫຼື ຈຳນວນທຳອິດxຈຳນວນທີສອງ ເຊັ່ນ 12 34 = 50x20 (2 ໂຕເທິງ 50 ລຸ່ມ 20), 123 = 10x5 (3 ໂຕເທິງ 10 ໂຕດ 5)",
+    label: "ຂໍ້ຄວາມໂພຍ",
+    add: "ເພີ່ມ {n} ລາຍການ",
+    rejected: "ແຖວທີ່ຍັງເພີ່ມບໍ່ໄດ້",
+    line: "ແຖວ {n}",
+    reasons: { format: "ອ່ານຮູບແບບບໍ່ໄດ້", unoffered: "ແພັກເກັດນີ້ບໍ່ຮັບປະເພດນີ້", closed: "ມີເລກທີ່ປິດຮັບ", duplicate: "ມີເລກຊ້ຳກັບໃນໂພຍ" },
+  },
   keypad: {
     type: "ພິມເລກ {n} ຫຼັກ",
     oneDigit: "ກົດເລກຫຼັກດຽວ",
@@ -75,6 +97,9 @@ export const play: typeof th = {
     cut: "ອັດຕາຫຼຸດ",
   },
   slip: {
+    discount: "ສ່ວນຫຼຸດ",
+    pay: "ຍອດຈ່າຍ",
+    notOffered: "ແພັກເກັດນີ້ບໍ່ຮັບ",
     pays: "ຈ່າຍ",
     count: "{n} ເລກ",
     ifWin: "ຖືກໄດ້ ฿{amount}",
@@ -88,6 +113,9 @@ export const play: typeof th = {
     clearAll: "ລ້າງໂພຍທັງໝົດ",
   },
   review: {
+    stake: "ຍອດແທງ",
+    discount: "ສ່ວນຫຼຸດ",
+    pay: "ຍອດຈ່າຍ",
     cannot: "ແທງບໍ່ໄດ້",
     success: "ແທງສຳເລັດ",
     title: "ກວດສອບໂພຍ",
@@ -121,6 +149,10 @@ export const play: typeof th = {
     meta: "{code} · {time} · {n} ລາຍການ",
   },
   bill: {
+    package: "ແພັກເກັດ",
+    standard: "ມາດຕະຖານ",
+    discount: "ສ່ວນຫຼຸດ",
+    paid: "ຍອດຈ່າຍຈິງ",
     won: "ຖືກລາງວັນ",
     paidIn: "ເງິນລາງວັນເຂົ້າກະເປົາແລ້ວ",
     closes: "{label} · ປິດຮັບ {time} ໂມງ",

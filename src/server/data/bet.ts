@@ -1,6 +1,7 @@
 import "server-only";
 import { io } from "next/cache";
 import { betRules } from "chokprathan-core/rules/quote";
+import { STANDARD_PACKAGE } from "@/domain/bet-packages";
 import type { BetTypeCode, LottoGroup, ResultFormat } from "chokprathan-core/rules/types";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
@@ -17,8 +18,17 @@ export interface BetConfigView {
   short: string;
   digits: number;
   rate100: number;
+  discountBp: number;
   maxPerNumber: number;
   minStake: number;
+}
+
+export interface BetPackageView {
+  id: number;
+  standard: boolean;
+  /** The name staff gave it; the standard package is named in the member's language instead. */
+  name: string;
+  configs: BetConfigView[];
 }
 
 export interface SavedSet {
@@ -31,7 +41,8 @@ export interface BetPageData {
   serverNow: number;
   round: { id: number; label: string; opensAt: number; closesAt: number; drawAt: number; phase: RoundPhase };
   lotto: { id: number; slug: string; name: string; shortName: string; flag: string | null; format: ResultFormat; group: LottoGroup };
-  configs: BetConfigView[];
+  /** Never empty; the first one is preselected. */
+  packages: BetPackageView[];
   limits: { minStake: number; maxPerBill: number; maxLines: number };
   badges: LimitBadge[];
   sets: SavedSet[];
@@ -71,22 +82,28 @@ export async function getBetPage(roundId: number, viewer: SessionUser, rebetBill
 
   // The back office stores prices with each round; without them there is nothing to bet on yet.
   if (!stored) return null;
-  const rules = betRules(stored.config);
-
-  return {
-    serverNow: now,
-    round: { id: round.id, label: roundName(round, lang, t), opensAt: round.opensAt, closesAt: round.closesAt, drawAt: round.drawAt, phase: phaseOf(round, now) },
-    lotto: { id: lotto.id, slug: lotto.slug, name: lottoName(lotto, t), shortName: lottoShort(lotto, t), flag: lotto.flag, format: lotto.format, group: lotto.group },
-    configs: rules.map(({ code, digits, rate100, maxPerNumber, minStake }) => ({
+  const packages = stored.config.packages.map((p) => ({
+    id: p.id,
+    standard: p.code === STANDARD_PACKAGE,
+    name: p.name,
+    configs: betRules(stored.config, p.id).map(({ code, digits, rate100, discountBp, maxPerNumber, minStake }) => ({
       code,
       label: t.lotto.betTypes[code].label,
       short: t.lotto.betTypes[code].short,
       digits,
       rate100,
+      discountBp,
       maxPerNumber,
       minStake,
     })),
-    limits: { minStake: Math.min(...rules.map((r) => r.minStake)), maxPerBill: stored.config.maxPerBill, maxLines: stored.config.maxLines },
+  }));
+
+  return {
+    serverNow: now,
+    round: { id: round.id, label: roundName(round, lang, t), opensAt: round.opensAt, closesAt: round.closesAt, drawAt: round.drawAt, phase: phaseOf(round, now) },
+    lotto: { id: lotto.id, slug: lotto.slug, name: lottoName(lotto, t), shortName: lottoShort(lotto, t), flag: lotto.flag, format: lotto.format, group: lotto.group },
+    packages,
+    limits: { minStake: Math.min(...packages.flatMap((p) => p.configs.map((c) => c.minStake))), maxPerBill: stored.config.maxPerBill, maxLines: stored.config.maxLines },
     badges,
     sets: setRows.map((s) => ({ id: s.id, name: s.name, items: json.parse<SavedSet["items"]>(s.items, []) })),
     siblings: siblingRows.map((r) => {

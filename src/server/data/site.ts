@@ -16,6 +16,7 @@ export async function getSiteInfo() {
     phone: site.phone,
     announcement: site.announcement,
     cancelWindowMin: site.cancelWindowMin,
+    cancelCutoffMin: site.cancelCutoffMin,
     otpRequired: site.otpRequired,
     registrationOpen: site.registrationOpen,
   };

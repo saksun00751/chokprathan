@@ -124,12 +124,32 @@ async function BillBody({ params }: Pick<PageProps<"/[lang]/bills/[billId]">, "p
         <TicketDivider />
 
         <dl className="flex flex-col gap-1.5 p-5 text-sm">
+          {bill.money.packageName !== null && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-ink-2">{bl.package}</dt>
+              <dd className="text-right">{bill.money.standard ? bl.standard : bill.money.packageName}</dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt className="text-ink-2">{bl.totalStake}</dt>
             <dd>
-              <Money satang={bill.totalStake} className="font-semibold" />
+              <Money satang={bill.money.stake} className="font-semibold" />
             </dd>
           </div>
+          {bill.money.discount > 0 && (
+            <>
+              <div className="flex justify-between">
+                <dt className="text-ink-2">{bl.discount}</dt>
+                <dd className="tnum text-success">−฿{formatBaht(bill.money.discount, { decimals: "auto" })}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-ink-2">{bl.paid}</dt>
+                <dd>
+                  <Money satang={bill.money.paid} className="font-semibold" />
+                </dd>
+              </div>
+            </>
+          )}
           {(bill.status === "won" || bill.status === "lost") && (
             <div className="flex justify-between">
               <dt className="text-ink-2">{bl.payout}</dt>

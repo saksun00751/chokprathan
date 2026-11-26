@@ -5,6 +5,7 @@ import { z } from "zod";
 import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
 import { fmt } from "@/i18n/format";
 import { errorsT } from "@/i18n/server";
+import { parsePackageId } from "@/domain/bet-packages";
 import type { ActionResult } from "@/lib/action";
 import { json, q1, run } from "@/server/db";
 import { cancelBill, placeBill, quoteBill, type PlaceResult, type Quote } from "@/server/services/bills";
@@ -27,7 +28,7 @@ function parseLines(input: unknown): Lines | null {
 
 const validRound = (id: unknown): id is number => Number.isInteger(id) && (id as number) > 0;
 
-export async function quoteSlipAction(roundId: number, lines: unknown): Promise<ActionResult<Quote>> {
+export async function quoteSlipAction(roundId: number, lines: unknown, packageId?: unknown): Promise<ActionResult<Quote>> {
   const e = await errorsT();
   const viewer = await getViewer();
   if (!viewer) return { ok: false, error: e.bet.loginFirst };
@@ -35,14 +36,15 @@ export async function quoteSlipAction(roundId: number, lines: unknown): Promise<
   const limit = limitLocal(`quote:${viewer.id}`, 30, 10_000);
   if (!limit.ok) return { ok: false, error: fmt(e.bet.quoteBurst, { wait: retryText(limit.retryAfterMs, e) }) };
   const parsed = parseLines(lines);
-  if (!parsed) return { ok: false, error: e.bet.badLines };
-  return { ok: true, data: await quoteBill(viewer.id, roundId, parsed) };
+  const pack = parsePackageId(packageId);
+  if (!parsed || pack === null) return { ok: false, error: e.bet.badLines };
+  return { ok: true, data: await quoteBill(viewer.id, roundId, parsed, Date.now(), pack) };
 }
 
 export async function placeSlipAction(
   roundId: number,
   lines: unknown,
-  opts: { expected?: string; acceptChanges?: boolean; requestId?: string },
+  opts: { expected?: string; acceptChanges?: boolean; requestId?: string; packageId?: number },
 ): Promise<ActionResult<PlaceResult>> {
   const e = await errorsT();
   const viewer = await getViewer();
@@ -52,8 +54,11 @@ export async function placeSlipAction(
   const limit = limitLocal(`bet:${viewer.id}`, 10, 10_000);
   if (!limit.ok) return { ok: false, error: fmt(e.bet.placeBurst, { wait: retryText(limit.retryAfterMs, e) }) };
   const parsed = parseLines(lines);
-  if (!parsed) return { ok: false, error: e.bet.badLines };
+  // A package that cannot be read is refused: falling back to the standard one would change the price.
+  const pack = parsePackageId(opts?.packageId);
+  if (!parsed || pack === null) return { ok: false, error: e.bet.badLines };
   const result = await placeBill(viewer.id, roundId, parsed, {
+    packageId: pack,
     expected: typeof opts?.expected === "string" ? opts.expected.slice(0, 32) : undefined,
     acceptChanges: opts?.acceptChanges === true,
     requestId: typeof opts?.requestId === "string" && /^[A-Za-z0-9-]{8,40}$/.test(opts.requestId) ? opts.requestId : undefined,

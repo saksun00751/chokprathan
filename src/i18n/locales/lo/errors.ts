@@ -117,6 +117,7 @@ export const errors: typeof th = {
     voucherFull: "ຄູປອງນີ້ຖືກໃຊ້ຄົບຈຳນວນແລ້ວ",
   },
   bet: {
+    packageGone: "ແພັກເກັດນີ້ບໍ່ມີໃນງວດນີ້ແລ້ວ ໂຫຼດໜ້າໃໝ່ແລ້ວເລືອກອີກຄັ້ງ",
     loginFirst: "ກະລຸນາເຂົ້າສູ່ລະບົບກ່ອນແທງ",
     roundNotFound: "ບໍ່ພົບງວດນີ້",
     quoteBurst: "ກວດໂພຍຖີ່ເກີນໄປ ລໍຖ້າ {wait}",

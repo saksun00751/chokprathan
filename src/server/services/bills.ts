@@ -191,7 +191,7 @@ function quoteLines(roundId: number, lines: SlipLine[], now: number, { e, betLab
     case undefined:
       return quote;
     case "package":
-      return { ...quote, error: "bad_package", message: m.badLines };
+      return { ...quote, error: "bad_package", message: m.packageGone };
     case "empty":
       return { ...quote, error: "empty", message: m.empty };
     case "too_many_lines":

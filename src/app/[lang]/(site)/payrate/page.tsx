@@ -2,12 +2,13 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Flag } from "@/components/ui/flag";
 import { Card, PageHeader, SectionTitle, Skeleton } from "@/components/ui/primitives";
+import { discountPercent } from "@/domain/bet-packages";
 import { byGroup } from "@/domain/lotto-groups";
 import { formatRate } from "chokprathan-core/rules/money";
 import { fmt, formatNumber } from "@/i18n/format";
 import { getI18n, pageMeta } from "@/i18n/rsc";
 import { getGroups } from "@/server/data/groups";
-import { getRateTables } from "@/server/data/results";
+import { getOpenPackages, getRateTables } from "@/server/data/results";
 
 export const generateMetadata = () => pageMeta("payrate");
 
@@ -24,7 +25,7 @@ export default async function PayratePage() {
 }
 
 async function PayrateBody() {
-  const [{ rows, codes, tiers, limits }, groups, { t }] = await Promise.all([getRateTables(), getGroups(), getI18n()]);
+  const [{ rows, codes, tiers, limits }, offers, groups, { t }] = await Promise.all([getRateTables(), getOpenPackages(), getGroups(), getI18n()]);
   const p = t.info.payrate;
   return (
     <div className="flex flex-col gap-10">
@@ -68,6 +69,46 @@ async function PayrateBody() {
           })}
         </table>
       </Card>
+
+      {offers.length > 0 && (
+        <section aria-labelledby="packages">
+          <SectionTitle id="packages">{p.packagesTitle}</SectionTitle>
+          <p className="mb-4 max-w-[60ch] text-ink-2">{p.packagesBody}</p>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {offers.flatMap((lotto) =>
+              lotto.packages.map((pack) => (
+                <Card key={`${lotto.slug}:${pack.id}`} className="overflow-x-auto">
+                  <div className="flex items-center gap-2 px-4 py-3">
+                    <Flag code={lotto.flag} className="size-5" />
+                    <h3 className="font-semibold">
+                      {lotto.name} · {pack.name}
+                    </h3>
+                    <span className="ml-auto text-xs text-ink-3">{lotto.round}</span>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="bg-panel text-left text-xs text-ink-3">
+                      <tr>
+                        <th className="px-4 py-2 font-medium">{p.type}</th>
+                        <th className="px-4 py-2 text-right font-medium">{p.rate}</th>
+                        <th className="px-4 py-2 text-right font-medium">{p.discount}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {pack.rates.map((r) => (
+                        <tr key={r.code}>
+                          <td className="px-4 py-2">{t.lotto.betTypes[r.code].label}</td>
+                          <td className="tnum px-4 py-2 text-right font-semibold">{formatRate(r.rate100)}</td>
+                          <td className="tnum px-4 py-2 text-right">{r.discountBp > 0 ? `${discountPercent(r.discountBp)}%` : "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Card>
+              )),
+            )}
+          </div>
+        </section>
+      )}
 
       <section aria-labelledby="tiers" className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div>

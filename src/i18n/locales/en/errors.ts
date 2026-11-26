@@ -117,6 +117,7 @@ export const errors: typeof th = {
     voucherFull: "This voucher has been fully redeemed",
   },
   bet: {
+    packageGone: "This package is no longer offered on this draw. Reload the page and choose again.",
     loginFirst: "Please log in before betting",
     roundNotFound: "Draw not found",
     quoteBurst: "Reviewing too often. Please wait {wait}.",

@@ -1,11 +1,13 @@
 import "server-only";
 import { io } from "next/cache";
+import { billMoney } from "@/domain/bet-packages";
 import type { BillStatus } from "@/domain/labels";
 import type { BetTypeCode, ResultFormat, RoundResult, Segment } from "chokprathan-core/rules/types";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { json, q, q1 } from "@/server/db";
 import { getLotto, listLottos } from "@/server/services/lottos";
+import { getRoundConfigVersion } from "@/server/services/round-config";
 import { getRound, phaseOf } from "@/server/services/rounds";
 import { getSettings } from "@/server/services/settings";
 
@@ -106,7 +108,8 @@ export interface BillDetail {
   id: number;
   code: string;
   status: BillStatus;
-  totalStake: number;
+  /** satang; `paid` is what left the wallet, `stake` is before the discount. */
+  money: ReturnType<typeof billMoney>;
   totalPayout: number;
   createdAt: number;
   settledAt: number | null;
@@ -121,15 +124,16 @@ export async function getMyBill(userId: number, billId: number): Promise<BillDet
   const { lang, t } = await getI18n();
   await io();
   const now = Date.now();
-  const b = await q1<{ id: number; code: string; status: BillStatus; total_stake: number; total_payout: number; created_at: number; settled_at: number | null; round_id: number }>(
-    "SELECT id, code, status, total_stake, total_payout, created_at, settled_at, round_id FROM bills WHERE id = ? AND user_id = ?",
+  const b = await q1<{ id: number; code: string; status: BillStatus; total_stake: number; discount: number; package_id: number | null; config_version: number | null; total_payout: number; created_at: number; settled_at: number | null; round_id: number }>(
+    "SELECT id, code, status, total_stake, discount, package_id, config_version, total_payout, created_at, settled_at, round_id FROM bills WHERE id = ? AND user_id = ?",
     billId,
     userId,
   );
   if (!b) return null;
   const round = (await getRound(b.round_id))!;
   const lotto = (await getLotto(round.lottoId))!;
-  const [items, settings, rebet] = await Promise.all([
+  const [config, items, settings, rebet] = await Promise.all([
+    b.config_version === null ? undefined : getRoundConfigVersion(b.round_id, b.config_version),
     q<{ id: number; bet_type: BetTypeCode; number: string; stake: number; rate100: number; segments: string; potential: number; status: BillStatus; payout: number }>(
       "SELECT id, bet_type, number, stake, rate100, segments, potential, status, payout FROM bill_items WHERE bill_id = ? ORDER BY id",
       billId,
@@ -150,7 +154,7 @@ export async function getMyBill(userId: number, billId: number): Promise<BillDet
     id: b.id,
     code: b.code,
     status: b.status,
-    totalStake: b.total_stake,
+    money: billMoney({ totalPaid: b.total_stake, discount: b.discount, packageId: b.package_id }, config),
     totalPayout: b.total_payout,
     createdAt: b.created_at,
     settledAt: b.settled_at,

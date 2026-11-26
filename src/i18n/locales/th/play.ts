@@ -1,6 +1,19 @@
 /** Betting, bills, and saved number sets. */
 export const play = {
   composer: {
+    package: "แพ็กเกจ",
+    standard: "มาตรฐาน",
+    discount: "ส่วนลด",
+    discountUpTo: "ลดสูงสุด {percent}%",
+    packageGone: "แพ็กเกจที่เลือกไม่มีในงวดนี้แล้ว เปลี่ยนเป็นแพ็กเกจมาตรฐาน ตรวจอัตราก่อนยืนยัน",
+    switchTitle: "เปลี่ยนแพ็กเกจ",
+    switchBody: "แพ็กเกจ {name} ไม่รับ {n} รายการด้านล่าง ถ้าเปลี่ยน รายการเหล่านี้จะถูกลบออกจากโพย",
+    switchConfirm: "เปลี่ยนและลบ",
+    switchKeep: "ไม่เปลี่ยน",
+    typeSkipped: "ข้าม {n} รายการที่แพ็กเกจนี้ไม่รับ",
+    notOpenNotice: "งวดนี้ยังไม่เปิดรับ เปิดรับ {time} น.",
+    pairs: { high: "สูง", low: "ต่ำ", odd: "คี่", even: "คู่" },
+    paste: "วางข้อความโพย",
     added: "เพิ่ม {n} รายการ",
     addedSkipped: "เพิ่ม {n} รายการ ข้าม {skipped} เลขที่ปิดรับ",
     alreadyIn: "เลขนี้อยู่ในโพยแล้ว",
@@ -58,6 +71,15 @@ export const play = {
     setName: "ชื่อเลขชุด",
     setNamePlaceholder: "เช่น เลขทะเบียนรถ",
   },
+  paste: {
+    title: "วางข้อความโพย",
+    hint: "บรรทัดละรายการ: เลข = ยอด หรือ ยอดแรกxยอดที่สอง เช่น 12 34 = 50x20 (2 ตัวบน 50 ล่าง 20), 123 = 10x5 (3 ตัวบน 10 โต๊ด 5)",
+    label: "ข้อความโพย",
+    add: "เพิ่ม {n} รายการ",
+    rejected: "บรรทัดที่ยังเพิ่มไม่ได้",
+    line: "บรรทัด {n}",
+    reasons: { format: "อ่านรูปแบบไม่ได้", unoffered: "แพ็กเกจนี้ไม่รับประเภทนี้", closed: "มีเลขที่ปิดรับ", duplicate: "มีเลขซ้ำกับในโพย" },
+  },
   keypad: {
     type: "พิมพ์เลข {n} หลัก",
     oneDigit: "กดเลขหลักเดียว",
@@ -74,6 +96,9 @@ export const play = {
     cut: "อัตราลด",
   },
   slip: {
+    discount: "ส่วนลด",
+    pay: "ยอดจ่าย",
+    notOffered: "แพ็กเกจนี้ไม่รับ",
     pays: "จ่าย",
     count: "{n} เลข",
     ifWin: "ถูกได้ ฿{amount}",
@@ -87,6 +112,9 @@ export const play = {
     clearAll: "ล้างโพยทั้งหมด",
   },
   review: {
+    stake: "ยอดแทง",
+    discount: "ส่วนลด",
+    pay: "ยอดจ่าย",
     cannot: "แทงไม่ได้",
     success: "แทงสำเร็จ",
     title: "ตรวจสอบโพย",
@@ -120,6 +148,10 @@ export const play = {
     meta: "{code} · {time} · {n} รายการ",
   },
   bill: {
+    package: "แพ็กเกจ",
+    standard: "มาตรฐาน",
+    discount: "ส่วนลด",
+    paid: "ยอดจ่ายจริง",
     won: "ถูกรางวัล",
     paidIn: "เงินรางวัลเข้ากระเป๋าแล้ว",
     closes: "{label} · ปิดรับ {time} น.",

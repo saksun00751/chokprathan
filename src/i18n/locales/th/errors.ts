@@ -116,6 +116,7 @@ export const errors = {
     voucherFull: "คูปองนี้ถูกใช้ครบจำนวนแล้ว",
   },
   bet: {
+    packageGone: "แพ็กเกจนี้ไม่มีในงวดนี้แล้ว โหลดหน้าใหม่แล้วเลือกอีกครั้ง",
     loginFirst: "กรุณาเข้าสู่ระบบก่อนแทง",
     roundNotFound: "ไม่พบงวดนี้",
     quoteBurst: "ตรวจโพยถี่เกินไป รอ {wait}",

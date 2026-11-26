@@ -16,6 +16,10 @@ export const info: typeof th = {
     emptyBody: "Results appear here as soon as they are drawn.",
   },
   payrate: {
+    packagesTitle: "Discount packages on open draws",
+    packagesBody: "You pay less by the discount, at that package's own rates. Winnings are worked out on the stake before the discount.",
+    rate: "Pays per baht",
+    discount: "Discount",
     description: "How much each baht pays, for every lottery and bet type",
     lotto: "Lottery",
     tiersTitle: "Automatic rate cuts",
@@ -31,6 +35,9 @@ export const info: typeof th = {
     noCut: "No cut",
   },
   rules: {
+    cancelCutoff: "Cancelling also stops {min} minutes before the draw closes.",
+    discountTitle: "Packages and discounts",
+    discountBody: "Some draws offer more than one package, and a bill uses one of them. The discount comes off what you pay, line by line, rounded down to the satang. Winnings are the stake before discount times the package's rate. A cancelled bill refunds what you actually paid.",
     description: "Read once, and know everything that touches your money.",
     howTitle: "How to play",
     how: [
@@ -79,6 +86,7 @@ export const info: typeof th = {
       "Transfer only from the bank account you signed up with, and send exactly the amount shown, including the satang, so the system can match it.",
       "Withdrawals go only to the account you signed up with. While pending, the amount is held. If it is rejected, it returns to your wallet automatically.",
       "If you take a promotion bonus, you need to reach its turnover before withdrawing. The amount left is shown on the wallet page.",
+      "If a result is corrected and money has to be taken back but your wallet is short, the rest becomes a debt. Money coming in repays it first, and withdrawals stay blocked until it is paid.",
     ],
     mindfulTitle: "Play responsibly",
     mindfulBody:

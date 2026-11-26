@@ -18,6 +18,8 @@ export interface LimitBadge {
   /** null = closed */
   rate100: number | null;
   baseRate100: number;
+  /** The cut as a percent of any package's own rate; null = closed. */
+  percent: number | null;
   source: "auto" | "manual";
 }
 
@@ -29,9 +31,18 @@ type ExposureLite = { round_id: number; bet_type: BetTypeCode; number: string; t
 const toLimit = (r: Pick<ManualRow, "kind" | "percent">): ManualLimit =>
   r.kind === "closed" ? { kind: "closed" } : { kind: "percent", percent: r.percent ?? 100 };
 
-/** A round's own prices (its first package); the lottery's current ones until it has a config. */
-const configsOf = (own: RoundConfig | undefined, current: () => BetConfig[]): BetConfig[] =>
-  own ? betRules(own).map((c) => ({ ...c, customRisk: false })) : current();
+/**
+ * A round's own prices; the lottery's current ones until it has a config. Every bet type any package
+ * offers is listed, at the first (standard) package's rate where that one offers it.
+ */
+function configsOf(own: RoundConfig | undefined, current: () => BetConfig[]): BetConfig[] {
+  if (!own) return current();
+  const byType = new Map<BetTypeCode, BetConfig>();
+  for (const pack of own.packages) {
+    for (const rule of betRules(own, pack.id)) if (!byType.has(rule.code)) byType.set(rule.code, { ...rule, customRisk: false });
+  }
+  return [...byType.values()];
+}
 
 /** The smallest total at which any profile starts cutting: rows below it can never carry a badge. */
 function cutFloor(configs: BetConfig[]): number {
@@ -61,7 +72,9 @@ function badgesFor(configs: Map<BetTypeCode, BetConfig>, exposures: ExposureLite
     const rate100 = marginalRate100(cfg.rate100, cfg.profile, limit, total);
     if (rate100 !== null && rate100 >= cfg.rate100) continue;
     const autoRate = marginalRate100(cfg.rate100, cfg.profile, null, total);
-    badges.push({ betType, number, rate100, baseRate100: cfg.rate100, source: rate100 === autoRate ? "auto" : "manual" });
+    // Priced on a base of 100.00, the answer is the percent itself.
+    const share = marginalRate100(10_000, cfg.profile, limit, total);
+    badges.push({ betType, number, rate100, baseRate100: cfg.rate100, percent: share === null ? null : share / 100, source: rate100 === autoRate ? "auto" : "manual" });
   }
   return badges.sort((a, b) => a.betType.localeCompare(b.betType) || a.number.localeCompare(b.number));
 }

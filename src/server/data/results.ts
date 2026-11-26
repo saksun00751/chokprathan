@@ -2,12 +2,14 @@ import "server-only";
 import { io } from "next/cache";
 import { betTypesFor } from "chokprathan-core/rules/betTypes";
 import type { BetTypeCode, RiskProfile } from "chokprathan-core/rules/types";
+import { packageRows, STANDARD_PACKAGE } from "@/domain/bet-packages";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { memo } from "@/server/cache";
 import { RESULTS_HISTORY_TTL_MS, RESULTS_TTL_MS } from "@/server/cache-ttl";
 import { q } from "@/server/db";
 import { betConfigs, getLottoBySlug, listLottos } from "@/server/services/lottos";
+import { latestRoundConfigs } from "@/server/services/round-config";
 import { toRound, type RoundRow } from "@/server/services/rounds";
 import { getSettings } from "@/server/services/settings";
 
@@ -62,4 +64,24 @@ export async function getRateTables() {
     maxPerNumber: settings.limits.maxPerNumber[code],
   }));
   return { rows, codes, tiers, limits: { minStake: settings.limits.minStake, maxPerBill: settings.limits.maxPerBill } };
+}
+
+/** Discount packages of the round each lottery is taking bets on now. The standard one is in `getRateTables`. */
+export async function getOpenPackages() {
+  const { lang, t } = await getI18n();
+  await io();
+  const now = Date.now();
+  const lottos = await listLottos();
+  const rows = await q<RoundRow>("SELECT * FROM rounds WHERE status = 'scheduled' AND opens_at <= ? AND closes_at > ? ORDER BY closes_at", now, now);
+  // The round closing soonest speaks for its lottery.
+  const next = new Map<number, RoundRow>();
+  for (const row of rows) if (!next.has(row.lotto_id)) next.set(row.lotto_id, row);
+  const configs = await latestRoundConfigs([...next.values()].map((r) => r.id));
+  return lottos.flatMap((lotto) => {
+    const row = next.get(lotto.id);
+    const config = row && configs.get(row.id);
+    const packages = config ? packageRows(config).filter((p) => p.code !== STANDARD_PACKAGE) : [];
+    if (!row || packages.length === 0) return [];
+    return [{ slug: lotto.slug, name: lottoShort(lotto, t), flag: lotto.flag, round: roundName(toRound(row), lang, t), packages }];
+  });
 }

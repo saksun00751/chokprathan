@@ -2,6 +2,19 @@ import type { play as th } from "../th/play";
 
 export const play: typeof th = {
   composer: {
+    package: "Package",
+    standard: "Standard",
+    discount: "Discount",
+    discountUpTo: "Up to {percent}% off",
+    packageGone: "The package you chose is no longer offered on this draw. You are now on the standard package; check the rates before confirming.",
+    switchTitle: "Change package",
+    switchBody: "The {name} package does not take the {n} lines below. Changing removes them from your slip.",
+    switchConfirm: "Change and remove",
+    switchKeep: "Keep current",
+    typeSkipped: "Skipped {n} lines this package does not take",
+    notOpenNotice: "This draw is not open yet. It opens {time}.",
+    pairs: { high: "High", low: "Low", odd: "Odd", even: "Even" },
+    paste: "Paste a slip",
     added: "Added {n}",
     addedSkipped: "Added {n}, skipped {skipped} closed numbers",
     alreadyIn: "This number is already on the bill",
@@ -60,6 +73,15 @@ export const play: typeof th = {
     setName: "Set name",
     setNamePlaceholder: "e.g. my licence plate",
   },
+  paste: {
+    title: "Paste a slip",
+    hint: "One entry per line: numbers = amount, or first amount x second. 12 34 = 50x20 is top 50, bottom 20. 123 = 10x5 is 3 top 10, tote 5.",
+    label: "Slip text",
+    add: "Add {n} lines",
+    rejected: "Lines that could not be added",
+    line: "Line {n}",
+    reasons: { format: "Format not recognised", unoffered: "This package does not take this bet type", closed: "Includes a closed number", duplicate: "Includes a number already in the slip" },
+  },
   keypad: {
     type: "Type a {n}-digit number",
     oneDigit: "Enter one digit",
@@ -76,6 +98,9 @@ export const play: typeof th = {
     cut: "Cut rate",
   },
   slip: {
+    discount: "Discount",
+    pay: "To pay",
+    notOffered: "Not in this package",
     pays: "Pays",
     count: "{n} numbers",
     ifWin: "Wins ฿{amount}",
@@ -89,6 +114,9 @@ export const play: typeof th = {
     clearAll: "Clear the whole bill",
   },
   review: {
+    stake: "Stake",
+    discount: "Discount",
+    pay: "To pay",
     cannot: "Can't place this bet",
     success: "Bet placed",
     title: "Review bill",
@@ -122,6 +150,10 @@ export const play: typeof th = {
     meta: "{code} · {time} · {n} items",
   },
   bill: {
+    package: "Package",
+    standard: "Standard",
+    discount: "Discount",
+    paid: "Amount paid",
     won: "Won",
     paidIn: "Winnings are in your wallet",
     closes: "{label} · closes {time}",

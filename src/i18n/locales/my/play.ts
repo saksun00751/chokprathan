@@ -2,6 +2,19 @@ import type { play as th } from "../th/play";
 
 export const play: typeof th = {
   composer: {
+    package: "ပက်ကေ့ချ်",
+    standard: "ပုံမှန်",
+    discount: "လျှော့ဈေး",
+    discountUpTo: "{percent}% အထိ လျှော့",
+    packageGone: "ရွေးထားသော ပက်ကေ့ချ်ကို ဤအကြိမ်တွင် မရနိုင်တော့ပါ။ ပုံမှန်ပက်ကေ့ချ်သို့ ပြောင်းထားသည်။ အတည်မပြုမီ နှုန်းကို စစ်ပါ",
+    switchTitle: "ပက်ကေ့ချ် ပြောင်းရန်",
+    switchBody: "{name} ပက်ကေ့ချ်သည် အောက်ပါ {n} ခုကို လက်မခံပါ။ ပြောင်းလျှင် စလစ်မှ ဖယ်ရှားမည်",
+    switchConfirm: "ပြောင်းပြီး ဖယ်ရှားမည်",
+    switchKeep: "မပြောင်းပါ",
+    typeSkipped: "ဤပက်ကေ့ချ် လက်မခံသော {n} ခုကို ကျော်ခဲ့သည်",
+    notOpenNotice: "ဤအကြိမ်ကို မဖွင့်သေးပါ။ ဖွင့်ချိန် {time}",
+    pairs: { high: "အကြီး", low: "အငယ်", odd: "မ", even: "စုံ" },
+    paste: "စလစ်စာသား ထည့်ရန်",
     added: "{n} ခု ထည့်ပြီး",
     addedSkipped: "{n} ခု ထည့်ပြီး၊ ပိတ်ထားသော ဂဏန်း {skipped} ခု ကျော်ခဲ့သည်",
     alreadyIn: "ဤဂဏန်း ထိုးစာရင်းထဲ ရှိပြီးသား",
@@ -60,6 +73,15 @@ export const play: typeof th = {
     setName: "ဂဏန်းအစု အမည်",
     setNamePlaceholder: "ဥပမာ ကားနံပါတ်",
   },
+  paste: {
+    title: "စလစ်စာသား ထည့်ရန်",
+    hint: "တစ်ကြောင်းလျှင် တစ်ခု- နံပါတ် = ငွေပမာဏ သို့မဟုတ် ပထမပမာဏxဒုတိယပမာဏ။ ဥပမာ 12 34 = 50x20 (2 လုံး အပေါ် 50 အောက် 20)၊ 123 = 10x5 (3 လုံး အပေါ် 10 တွတ် 5)",
+    label: "စလစ်စာသား",
+    add: "{n} ခု ထည့်မည်",
+    rejected: "မထည့်နိုင်သေးသော စာကြောင်းများ",
+    line: "စာကြောင်း {n}",
+    reasons: { format: "ပုံစံကို ဖတ်၍မရပါ", unoffered: "ဤပက်ကေ့ချ်သည် ဤအမျိုးအစားကို လက်မခံပါ", closed: "ပိတ်ထားသော နံပါတ် ပါဝင်သည်", duplicate: "စလစ်ထဲရှိ နံပါတ်နှင့် ထပ်နေသည်" },
+  },
   keypad: {
     type: "{n} လုံး ဂဏန်းရိုက်ပါ",
     oneDigit: "ဂဏန်းတစ်လုံး နှိပ်ပါ",
@@ -76,6 +98,9 @@ export const play: typeof th = {
     cut: "နှုန်းလျှော့",
   },
   slip: {
+    discount: "လျှော့ဈေး",
+    pay: "ပေးရမည့်ငွေ",
+    notOffered: "ဤပက်ကေ့ချ် လက်မခံပါ",
     pays: "ပေးနှုန်း",
     count: "ဂဏန်း {n} ခု",
     ifWin: "ပေါက်လျှင် ฿{amount}",
@@ -89,6 +114,9 @@ export const play: typeof th = {
     clearAll: "ထိုးစာရင်း အားလုံး ရှင်းမည်",
   },
   review: {
+    stake: "ထိုးငွေ",
+    discount: "လျှော့ဈေး",
+    pay: "ပေးရမည့်ငွေ",
     cannot: "ထိုး၍ မရပါ",
     success: "ထိုးပြီးပါပြီ",
     title: "ထိုးစာရင်း စစ်ဆေးမည်",
@@ -122,6 +150,10 @@ export const play: typeof th = {
     meta: "{code} · {time} · {n} ခု",
   },
   bill: {
+    package: "ပက်ကေ့ချ်",
+    standard: "ပုံမှန်",
+    discount: "လျှော့ဈေး",
+    paid: "အမှန်ပေးချေငွေ",
     won: "ဆုပေါက်",
     paidIn: "ဆုငွေ ပိုက်ဆံအိတ်ထဲ ရောက်ပြီ",
     closes: "{label} · {time} တွင် ပိတ်",

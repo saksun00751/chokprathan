@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { BookmarkPlus, Check, ChevronUp, Info, Keyboard, Grid3x3, ListChecks, Shuffle } from "lucide-react";
+import { BookmarkPlus, Check, ChevronUp, ClipboardPaste, Info, Keyboard, Grid3x3, ListChecks, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
-import { formatRate } from "chokprathan-core/rules/money";
+import { formatBaht, formatRate } from "chokprathan-core/rules/money";
 import { doubles, nineteenDoors, permutations, swipeBack, swipeFront, triples } from "chokprathan-core/rules/numbers";
+import type { SlipLine } from "chokprathan-core/rules/quote";
+import { pairGroup } from "chokprathan-core/rules/slip";
 import type { BetTypeCode } from "chokprathan-core/rules/types";
+import { betWindow, discountPercent, liveRate, mergeLines, slipDue, unofferedLines } from "@/domain/bet-packages";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatClock, formatDate, formatNumber } from "@/i18n/format";
 import { Button } from "@/components/ui/button";
@@ -16,10 +19,11 @@ import { Sheet } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { saveNumberSetAction } from "@/server/actions/bills";
-import type { BetConfigView, BetPageData } from "@/server/data/bet";
+import type { BetConfigView, BetPackageView, BetPageData } from "@/server/data/bet";
 import type { LimitBadge } from "@/server/services/risk";
 import { Keypad, type OneShotTool } from "./keypad";
 import { PanelGrid, type CellState } from "./panel-grid";
+import { PasteSheet } from "./paste-sheet";
 import { ReviewSheet } from "./review-sheet";
 import { BulkStake, SlipList, SlipTotals } from "./slip";
 import { itemKey, type SlipItem } from "./types";
@@ -38,14 +42,21 @@ export function BetComposer({ data }: { data: BetPageData }) {
   const c_ = t.play.composer;
   const toast = useToast();
   const now = useNow(data.serverNow);
-  const configs = useMemo(() => new Map(data.configs.map((c) => [c.code, c])), [data.configs]);
+  const [chosenId, setChosenId] = useState(data.packages[0].id);
+  // A package staff switched off while the page was open falls back to the standard one, and says so.
+  const pack = data.packages.find((p) => p.id === chosenId) ?? data.packages[0];
+  const packageGone = pack.id !== chosenId;
+  const configs = useMemo(() => new Map(pack.configs.map((c) => [c.code, c])), [pack]);
+  const packName = (p: BetPackageView) => (p.standard ? c_.standard : p.name);
 
   // Live cut rates: whichever is newer wins, the server render (after refresh) or the last poll.
   const [polled, setPolled] = useState<{ at: number; list: LimitBadge[] } | null>(null);
   const badgeList = polled && polled.at > data.serverNow ? polled.list : data.badges;
   const badges = useMemo(() => new Map(badgeList.map((b) => [itemKey(b.betType, b.number), b])), [badgeList]);
 
-  const [selected, setSelected] = useState<BetTypeCode[]>(() => defaultSelection(data.configs));
+  const [chosenTypes, setSelected] = useState<BetTypeCode[]>(() => defaultSelection(data.packages[0].configs));
+  const offeredTypes = chosenTypes.filter((c) => configs.has(c));
+  const selected = offeredTypes.length ? offeredTypes : defaultSelection(pack.configs);
   const digits = configs.get(selected[0])?.digits ?? 2;
   const [mode, setMode] = useState<Mode>("keypad");
   const [entry, setEntry] = useState("");
@@ -63,9 +74,14 @@ export function BetComposer({ data }: { data: BetPageData }) {
   const [ratesOpen, setRatesOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [undo, setUndo] = useState<SlipItem[] | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [switching, setSwitching] = useState<BetPackageView | null>(null);
 
-  const closed = data.round.phase !== "open" || now >= data.round.closesAt;
-  const total = items.reduce((s, i) => s + i.stake, 0);
+  const stage = betWindow(data.round, now);
+  const closed = stage !== "open";
+  const due = slipDue(items, configs);
+  const total = due.stake;
+  const lost = switching ? unofferedLines(items, new Map(switching.configs.map((c) => [c.code, c]))) : [];
 
   /* live cut rates */
   useEffect(() => {
@@ -92,32 +108,50 @@ export function BetComposer({ data }: { data: BetPageData }) {
 
   /* ---------- slip mutations ---------- */
 
-  function addNumbers(numbers: string[], types: BetTypeCode[] = selected, stake = stakeDefault) {
-    const existing = new Set(items.map((i) => i.key));
-    const next = [...items];
-    let added = 0;
+  /** Numbers from a tool or a saved set: stakes are brought inside each type's limits. */
+  function addLines(wanted: SlipLine[]) {
     let skippedClosed = 0;
-    for (const code of types) {
-      const cfg = configs.get(code);
-      if (!cfg) continue;
-      for (const n of numbers) {
-        if (n.length !== cfg.digits) continue;
-        const key = itemKey(code, n);
-        if (existing.has(key)) continue;
-        if (badges.get(key)?.rate100 === null) {
-          skippedClosed++;
-          continue;
-        }
-        existing.add(key);
-        next.push({ key, betType: code, number: n, stake: Math.min(Math.max(stake, cfg.minStake), cfg.maxPerNumber) });
-        added++;
-      }
+    let skippedType = 0;
+    const usable: SlipItem[] = [];
+    for (const l of wanted) {
+      const cfg = configs.get(l.betType);
+      const key = itemKey(l.betType, l.number);
+      if (!cfg) skippedType++;
+      else if (l.number.length !== cfg.digits) continue;
+      else if (badges.get(key)?.percent === null) skippedClosed++;
+      else usable.push({ key, betType: l.betType, number: l.number, stake: Math.min(Math.max(l.stake, cfg.minStake), cfg.maxPerNumber) });
     }
-    setItems(next);
+    const { lines, added } = mergeLines(items, usable);
+    setItems(lines);
     setUndo(null);
-    setFeedback(
-      added === 0 && skippedClosed === 0 ? c_.alreadyIn : skippedClosed ? fmt(c_.addedSkipped, { n: added, skipped: skippedClosed }) : fmt(c_.added, { n: added }),
-    );
+    const note =
+      added === 0 && skippedClosed === 0 ? c_.alreadyIn : skippedClosed ? fmt(c_.addedSkipped, { n: added, skipped: skippedClosed }) : fmt(c_.added, { n: added });
+    setFeedback(skippedType ? `${added || skippedClosed ? `${note} · ` : ""}${fmt(c_.typeSkipped, { n: skippedType })}` : note);
+  }
+
+  const addNumbers = (numbers: string[]) => addLines(selected.flatMap((betType) => numbers.map((number) => ({ betType, number, stake: stakeDefault }))));
+
+  /** Lines pasted as text keep the stakes typed; the review step explains any that are refused. */
+  function addPasted(wanted: SlipLine[]) {
+    const { lines, added } = mergeLines(items, wanted.map((l) => ({ ...l, key: itemKey(l.betType, l.number) })));
+    setItems(lines);
+    setUndo(null);
+    setFeedback(fmt(c_.added, { n: added }));
+  }
+
+  function switchTo(next: BetPackageView, keep: SlipItem[] = items) {
+    setChosenId(next.id);
+    setItems(keep);
+    setUndo(null);
+    setEntry("");
+    setTool(null);
+    setSwitching(null);
+  }
+
+  /** Ask first when the other package would not take some numbers already in the slip. */
+  function choosePackage(next: BetPackageView) {
+    if (unofferedLines(items, new Map(next.configs.map((c) => [c.code, c]))).length) setSwitching(next);
+    else switchTo(next);
   }
 
   const removeKeys = (keys: string[]) => setItems((list) => list.filter((i) => !keys.includes(i.key)));
@@ -125,7 +159,8 @@ export function BetComposer({ data }: { data: BetPageData }) {
   const setAllStakes = (stake: number) =>
     setItems((list) =>
       list.map((i) => {
-        const cfg = configs.get(i.betType)!;
+        const cfg = configs.get(i.betType);
+        if (!cfg) return i;
         return { ...i, stake: Math.min(Math.max(stake, cfg.minStake), cfg.maxPerNumber) };
       }),
     );
@@ -158,7 +193,8 @@ export function BetComposer({ data }: { data: BetPageData }) {
     const cfg = configs.get(code)!;
     setEntry("");
     setTool(null);
-    setSelected((cur) => {
+    setSelected(() => {
+      const cur = selected;
       const curDigits = configs.get(cur[0])?.digits;
       if (curDigits !== cfg.digits) return [code];
       if (cur.includes(code)) return cur.length > 1 ? cur.filter((c) => c !== code) : cur;
@@ -174,7 +210,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
       const key = itemKey(code, n);
       if (!items.some((i) => i.key === key)) selectedAll = false;
       const b = badges.get(key);
-      if (b?.rate100 !== null) closedAll = false;
+      if (b?.percent !== null) closedAll = false;
       if (b) cut = true;
     }
     if (closedAll && selected.length) return "closed";
@@ -208,7 +244,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
       ) : (
         <>
           <BulkStake onApply={setAllStakes} onClear={clearAll} disabled={closed} />
-          <SlipList items={items} configs={configs} badges={badges} onStake={setStake} onRemove={(k) => removeKeys([k])} disabled={closed} />
+          <SlipList items={items} configs={configs} badges={badges} labels={t.lotto.betTypes} onStake={setStake} onRemove={(k) => removeKeys([k])} disabled={closed} />
           <button type="button" onClick={() => setSaveOpen(true)} className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-brand hover:underline">
             <BookmarkPlus className="size-4" aria-hidden="true" />
             {c_.saveAsSet}
@@ -266,7 +302,19 @@ export function BetComposer({ data }: { data: BetPageData }) {
         </nav>
       )}
 
-      {closed && (
+      {stage === "upcoming" && (
+        <div role="status" className="mb-5 rounded-card bg-warning-soft p-4 font-semibold text-warning">
+          {fmt(c_.notOpenNotice, { time: `${formatDate(data.round.opensAt, lang, "long")} ${formatClock(data.round.opensAt)}` })}
+        </div>
+      )}
+
+      {packageGone && (
+        <p role="status" className="mb-5 rounded-card bg-warning-soft p-4 text-sm text-warning">
+          {c_.packageGone}
+        </p>
+      )}
+
+      {stage === "closed" && (
         <div role="status" className="mb-5 flex flex-col gap-3 rounded-card bg-danger-soft p-4 text-danger sm:flex-row sm:items-center sm:justify-between">
           <p className="font-semibold">{c_.closedNotice}</p>
           <Link href={`/lotto?group=${data.lotto.group}`} className="text-sm font-semibold underline">
@@ -278,10 +326,38 @@ export function BetComposer({ data }: { data: BetPageData }) {
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
         {/* composer */}
         <div className="flex min-w-0 flex-col gap-5">
+          {data.packages.length > 1 && (
+            <fieldset className="min-w-0">
+              <legend className="mb-2 text-sm font-semibold">{c_.package}</legend>
+              <div className="flex flex-wrap gap-2">
+                {data.packages.map((p) => {
+                  const on = p.id === pack.id;
+                  const discount = Math.max(...p.configs.map((c) => c.discountBp));
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => choosePackage(p)}
+                      className={cn(
+                        "flex min-h-11 items-center gap-2 rounded-control border px-3 py-1.5 text-sm font-medium transition-colors",
+                        on ? "border-brand bg-brand-soft text-brand-soft-ink" : "border-line-strong bg-surface text-ink hover:border-brand/50",
+                      )}
+                    >
+                      {on && <Check className="size-4" aria-hidden="true" />}
+                      {packName(p)}
+                      {discount > 0 && <span className="tnum rounded-full bg-success-soft px-2 py-0.5 text-xs text-success">{fmt(c_.discountUpTo, { percent: discountPercent(discount) })}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
+
           <fieldset className="min-w-0">
             <legend className="mb-2 text-sm font-semibold">{c_.betType}</legend>
             <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
-              {data.configs.map((c) => {
+              {pack.configs.map((c) => {
                 const on = selected.includes(c.code);
                 return (
                   <button
@@ -364,6 +440,10 @@ export function BetComposer({ data }: { data: BetPageData }) {
 
             {mode === "keypad" && (
               <div className="flex flex-col gap-3">
+                <button type="button" onClick={() => setPasteOpen(true)} disabled={closed} className="inline-flex items-center gap-1.5 self-start text-sm font-medium text-brand hover:underline disabled:opacity-50">
+                  <ClipboardPaste className="size-4" aria-hidden="true" />
+                  {c_.paste}
+                </button>
                 {digits >= 2 && (
                   <div className="-mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label={c_.tools}>
                     <ToolChip on={reverse} onClick={() => setReverse((r) => !r)} icon={<Shuffle className="size-4" aria-hidden="true" />}>
@@ -375,6 +455,11 @@ export function BetComposer({ data }: { data: BetPageData }) {
                         <ToolChip on={tool === "front"} onClick={() => setTool((x) => (x === "front" ? null : "front"))}>{c_.front}</ToolChip>
                         <ToolChip on={tool === "back"} onClick={() => setTool((x) => (x === "back" ? null : "back"))}>{c_.back}</ToolChip>
                         <ToolChip onClick={() => addNumbers(doubles())}>{c_.doubles}</ToolChip>
+                        {(["high", "low", "odd", "even"] as const).map((kind) => (
+                          <ToolChip key={kind} onClick={() => addNumbers(pairGroup(kind))}>
+                            {c_.pairs[kind]}
+                          </ToolChip>
+                        ))}
                       </>
                     )}
                     {digits === 3 && <ToolChip onClick={() => addNumbers(triples())}>{c_.triples}</ToolChip>}
@@ -421,10 +506,10 @@ export function BetComposer({ data }: { data: BetPageData }) {
                         variant="secondary"
                         disabled={closed}
                         onClick={() => {
-                          for (const code of new Set(set.items.map((i) => i.betType))) {
-                            const list = set.items.filter((i) => i.betType === code);
-                            addNumbers(list.map((i) => i.number), [code], list[0]?.stake ?? stakeDefault);
-                          }
+                          // One call for the whole set: each type takes the stake of its first number.
+                          const stakeOf = new Map<BetTypeCode, number>();
+                          for (const i of set.items) if (!stakeOf.has(i.betType)) stakeOf.set(i.betType, i.stake);
+                          addLines(set.items.map((i) => ({ betType: i.betType, number: i.number, stake: stakeOf.get(i.betType)! })));
                         }}
                       >
                         {c_.useSet}
@@ -448,7 +533,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">{slipPanel}</div>
           <div className="border-t border-line p-4">
-            <SlipTotals count={items.length} total={total} balance={data.balance} />
+            <SlipTotals count={items.length} total={total} discount={due.discount} balance={data.balance} />
             <Button size="lg" className="mt-3 w-full" disabled={items.length === 0 || closed} onClick={() => setReviewOpen(true)}>
               {c_.review}
             </Button>
@@ -465,7 +550,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
               <span className="block text-xs text-ink-3">
                 {fmt(c_.slipTitle, { n: items.length })}
               </span>
-              <span className="tnum block text-lg leading-tight font-semibold">฿{formatNumber(total)}</span>
+              <span className="tnum block text-lg leading-tight font-semibold">฿{formatBaht(due.net, { decimals: "auto" })}</span>
             </span>
           </button>
           <Button size="lg" disabled={items.length === 0 || closed} onClick={() => setReviewOpen(true)}>
@@ -481,7 +566,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
         footer={
           <div className="flex items-center gap-3">
             <div className="flex-1">
-              <SlipTotals count={items.length} total={total} balance={data.balance} />
+              <SlipTotals count={items.length} total={total} discount={due.discount} balance={data.balance} />
             </div>
             <Button size="lg" disabled={items.length === 0 || closed} onClick={() => { setSlipOpen(false); setReviewOpen(true); }}>
               {c_.reviewShort}
@@ -496,6 +581,9 @@ export function BetComposer({ data }: { data: BetPageData }) {
         open={reviewOpen}
         onClose={() => setReviewOpen(false)}
         roundId={data.round.id}
+        packageId={pack.id}
+        packageName={data.packages.length > 1 ? packName(pack) : null}
+        estimate={due.net}
         title={`${data.lotto.shortName} ${data.round.label}`}
         closesAt={data.round.closesAt}
         serverNow={data.serverNow}
@@ -515,14 +603,16 @@ export function BetComposer({ data }: { data: BetPageData }) {
             <tr className="text-left text-xs text-ink-3">
               <th className="pb-2 font-medium">{c_.type}</th>
               <th className="pb-2 text-right font-medium">{c_.perBaht}</th>
+              {pack.configs.some((c) => c.discountBp > 0) && <th className="pb-2 text-right font-medium">{c_.discount}</th>}
               <th className="pb-2 text-right font-medium">{c_.maxPerNumber}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {data.configs.map((c) => (
+            {pack.configs.map((c) => (
               <tr key={c.code}>
                 <td className="py-2.5">{c.label}</td>
                 <td className="tnum py-2.5 text-right font-semibold">{formatRate(c.rate100)}</td>
+                {pack.configs.some((x) => x.discountBp > 0) && <td className="tnum py-2.5 text-right">{c.discountBp > 0 ? `${discountPercent(c.discountBp)}%` : "-"}</td>}
                 <td className="tnum py-2.5 text-right">฿{formatNumber(c.maxPerNumber)}</td>
               </tr>
             ))}
@@ -537,18 +627,57 @@ export function BetComposer({ data }: { data: BetPageData }) {
             {c_.howCalculated}
           </Link>
         </p>
-        {badgeList.length > 0 && (
+        {badgeList.some((b) => configs.has(b.betType)) && (
           <>
             <h3 className="mt-5 mb-2 text-sm font-semibold">{c_.cutNow}</h3>
             <ul className="flex flex-wrap gap-2">
-              {badgeList.map((b) => (
-                <li key={`${b.betType}:${b.number}`} className={cn("tnum rounded-full px-2.5 py-1 text-xs font-semibold", b.rate100 === null ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning")}>
-                  {configs.get(b.betType)?.short} {b.number} {b.rate100 === null ? c_.closed : `×${formatRate(b.rate100)}`}
-                </li>
-              ))}
+              {badgeList.map((b) => {
+                const cfg = configs.get(b.betType);
+                if (!cfg) return null;
+                const rate = liveRate(cfg.rate100, b);
+                return (
+                  <li key={`${b.betType}:${b.number}`} className={cn("tnum rounded-full px-2.5 py-1 text-xs font-semibold", rate === null ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning")}>
+                    {cfg.short} {b.number} {rate === null ? c_.closed : `×${formatRate(rate)}`}
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}
+      </Sheet>
+
+      <PasteSheet
+        open={pasteOpen}
+        onClose={() => setPasteOpen(false)}
+        offered={configs}
+        taken={new Set(items.map((i) => i.key))}
+        closed={new Set(badgeList.filter((b) => b.percent === null).map((b) => itemKey(b.betType, b.number)))}
+        onAdd={addPasted}
+      />
+
+      <Sheet
+        open={switching !== null}
+        onClose={() => setSwitching(null)}
+        title={c_.switchTitle}
+        description={switching ? fmt(c_.switchBody, { name: packName(switching), n: lost.length }) : undefined}
+        footer={
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="lg" variant="secondary" onClick={() => setSwitching(null)}>
+              {c_.switchKeep}
+            </Button>
+            <Button size="lg" onClick={() => switching && switchTo(switching, items.filter((i) => switching.configs.some((c) => c.code === i.betType)))}>
+              {c_.switchConfirm}
+            </Button>
+          </div>
+        }
+      >
+        <ul className="flex flex-wrap gap-2">
+          {lost.map((l) => (
+            <li key={l.key} className="tnum rounded-full bg-panel px-2.5 py-1 text-sm">
+              {t.lotto.betTypes[l.betType].label} {l.number} · ฿{formatNumber(l.stake)}
+            </li>
+          ))}
+        </ul>
       </Sheet>
 
       <SaveSetSheet open={saveOpen} onClose={() => setSaveOpen(false)} items={items} />

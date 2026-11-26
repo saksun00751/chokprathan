@@ -63,6 +63,13 @@ export default async function RulesPage() {
           </Card>
         </section>
 
+        <section aria-labelledby="discount">
+          <h2 id="discount" className="text-lg font-semibold">
+            {r.discountTitle}
+          </h2>
+          <p className="mt-2 text-ink-2">{r.discountBody}</p>
+        </section>
+
         <section aria-labelledby="draws">
           <h2 id="draws" className="text-lg font-semibold">
             {r.drawsTitle}
@@ -153,6 +160,7 @@ async function CancelSection() {
         {t.info.rules.cancelTitle}
       </h2>
       <p className="mt-2 text-ink-2">{fmt(t.info.rules.cancelBody, { min: site.cancelWindowMin })}</p>
+      {site.cancelCutoffMin > 0 && <p className="mt-2 text-ink-2">{fmt(t.info.rules.cancelCutoff, { min: site.cancelCutoffMin })}</p>}
     </section>
   );
 }

@@ -22,6 +22,9 @@ export function ReviewSheet({
   open,
   onClose,
   roundId,
+  packageId,
+  packageName,
+  estimate,
   title,
   closesAt,
   serverNow,
@@ -33,6 +36,11 @@ export function ReviewSheet({
   open: boolean;
   onClose: () => void;
   roundId: number;
+  packageId: number;
+  /** null when the round offers only one package */
+  packageName: string | null;
+  /** satang the slip costs before the server has quoted it */
+  estimate: number;
   title: string;
   closesAt: number;
   serverNow: number;
@@ -52,7 +60,7 @@ export function ReviewSheet({
   const lines = [...items]
     .sort((a, b) => BET_TYPE_ORDER.indexOf(a.betType) - BET_TYPE_ORDER.indexOf(b.betType))
     .map(({ betType, number, stake }) => ({ betType, number, stake }));
-  const signature = JSON.stringify(lines);
+  const signature = JSON.stringify([packageId, lines]);
   const loading = open && !placed && quoted?.sig !== signature;
   const quote = quoted?.sig === signature ? quoted.quote : null;
   const message = quoted?.sig === signature ? quoted.message : null;
@@ -61,7 +69,8 @@ export function ReviewSheet({
   useEffect(() => {
     if (!open || placed) return;
     let cancelled = false;
-    quoteSlipAction(roundId, JSON.parse(signature)).then((r) => {
+    const [sentPackage, sentLines] = JSON.parse(signature);
+    quoteSlipAction(roundId, sentLines, sentPackage).then((r) => {
       if (cancelled) return;
       setQuoted(
         r.ok
@@ -87,7 +96,7 @@ export function ReviewSheet({
       if (attempt.current?.sig !== signature) {
         attempt.current = { sig: signature, id: Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("") };
       }
-      const r = await placeSlipAction(roundId, lines, { expected: quote.fingerprint, acceptChanges: accept, requestId: attempt.current.id });
+      const r = await placeSlipAction(roundId, lines, { expected: quote.fingerprint, acceptChanges: accept, requestId: attempt.current.id, packageId });
       if (!r.ok) return setQuoted({ sig: signature, quote, message: { tone: "danger", text: r.error } });
       const result = r.data;
       if (result.ok) {
@@ -104,7 +113,7 @@ export function ReviewSheet({
 
   const stage = placed ? ({ kind: "success", ...placed } as const) : loading ? ({ kind: "loading" } as const) : ({ kind: "ready" } as const);
   // satang the member would pay
-  const due = quote?.totalNet ?? lines.reduce((s, l) => s + l.stake, 0) * 100;
+  const due = quote?.totalNet ?? estimate;
   const short = balance < due;
   const rejected = quote?.lines.filter((l) => !l.ok).length ?? 0;
   const reduced = quote?.lines.filter((l) => l.ok && l.reduced).length ?? 0;
@@ -118,7 +127,8 @@ export function ReviewSheet({
       description={
         stage.kind === "success" ? undefined : (
           <span className="flex flex-wrap items-center gap-x-2">
-            {title} · {rv.closesIn} <Countdown closesAt={closesAt} serverNow={serverNow} />
+            {title}
+            {packageName && ` · ${packageName}`} · {rv.closesIn} <Countdown closesAt={closesAt} serverNow={serverNow} />
           </span>
         )
       }
@@ -141,9 +151,21 @@ export function ReviewSheet({
                 {rv.acceptChanges}
               </label>
             )}
+            {quote && quote.totalDiscount > 0 && (
+              <dl className="flex flex-col gap-1 text-sm">
+                <div className="flex justify-between">
+                  <dt className="text-ink-2">{rv.stake}</dt>
+                  <dd className="tnum">฿{formatBaht(quote.totalNet + quote.totalDiscount, { decimals: "auto" })}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-ink-2">{rv.discount}</dt>
+                  <dd className="tnum text-success">−฿{formatBaht(quote.totalDiscount, { decimals: "auto" })}</dd>
+                </div>
+              </dl>
+            )}
             <div className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-ink-3">{rv.total}</p>
+                <p className="text-xs text-ink-3">{quote && quote.totalDiscount > 0 ? rv.pay : rv.total}</p>
                 <p className="tnum text-xl font-semibold">฿{formatBaht(due, { decimals: "auto" })}</p>
               </div>
               {short ? (

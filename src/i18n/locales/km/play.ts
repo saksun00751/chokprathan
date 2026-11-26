@@ -2,6 +2,19 @@ import type { play as th } from "../th/play";
 
 export const play: typeof th = {
   composer: {
+    package: "កញ្ចប់",
+    standard: "ស្តង់ដារ",
+    discount: "បញ្ចុះតម្លៃ",
+    discountUpTo: "បញ្ចុះរហូតដល់ {percent}%",
+    packageGone: "កញ្ចប់ដែលបានជ្រើសលែងមានក្នុងវគ្គនេះហើយ បានប្តូរទៅកញ្ចប់ស្តង់ដារ សូមពិនិត្យអត្រាមុនបញ្ជាក់",
+    switchTitle: "ប្តូរកញ្ចប់",
+    switchBody: "កញ្ចប់ {name} មិនទទួល {n} ធាតុខាងក្រោមទេ បើប្តូរ ធាតុទាំងនេះនឹងត្រូវលុបចេញពីប័ណ្ណ",
+    switchConfirm: "ប្តូរ ហើយលុប",
+    switchKeep: "មិនប្តូរ",
+    typeSkipped: "បានរំលង {n} ធាតុដែលកញ្ចប់នេះមិនទទួល",
+    notOpenNotice: "វគ្គនេះមិនទាន់បើកទទួលទេ បើកនៅ {time}",
+    pairs: { high: "ខ្ពស់", low: "ទាប", odd: "សេស", even: "គូ" },
+    paste: "បិទភ្ជាប់អត្ថបទប័ណ្ណ",
     added: "បានបន្ថែម {n} មុខ",
     addedSkipped: "បានបន្ថែម {n} មុខ រំលង {skipped} លេខដែលបិទ",
     alreadyIn: "លេខនេះមានក្នុងសន្លឹកចាក់រួចហើយ",
@@ -59,6 +72,15 @@ export const play: typeof th = {
     setName: "ឈ្មោះឈុតលេខ",
     setNamePlaceholder: "ឧ. ស្លាកលេខរថយន្ត",
   },
+  paste: {
+    title: "បិទភ្ជាប់អត្ថបទប័ណ្ណ",
+    hint: "មួយបន្ទាត់មួយធាតុ៖ លេខ = ចំនួនប្រាក់ ឬ ចំនួនទីមួយxចំនួនទីពីរ ឧទាហរណ៍ 12 34 = 50x20 (2 ខ្ទង់លើ 50 ក្រោម 20) 123 = 10x5 (3 ខ្ទង់លើ 10 តូត 5)",
+    label: "អត្ថបទប័ណ្ណ",
+    add: "បន្ថែម {n} ធាតុ",
+    rejected: "បន្ទាត់ដែលមិនទាន់អាចបន្ថែមបាន",
+    line: "បន្ទាត់ {n}",
+    reasons: { format: "អានទម្រង់មិនបាន", unoffered: "កញ្ចប់នេះមិនទទួលប្រភេទនេះ", closed: "មានលេខដែលបិទទទួល", duplicate: "មានលេខស្ទួននឹងក្នុងប័ណ្ណ" },
+  },
   keypad: {
     type: "វាយលេខ {n} ខ្ទង់",
     oneDigit: "ចុចលេខមួយខ្ទង់",
@@ -75,6 +97,9 @@ export const play: typeof th = {
     cut: "អត្រាកាត់",
   },
   slip: {
+    discount: "បញ្ចុះតម្លៃ",
+    pay: "ប្រាក់ត្រូវបង់",
+    notOffered: "កញ្ចប់នេះមិនទទួល",
     pays: "សង",
     count: "{n} លេខ",
     ifWin: "ឈ្នះបាន ฿{amount}",
@@ -88,6 +113,9 @@ export const play: typeof th = {
     clearAll: "សម្អាតសន្លឹកចាក់ទាំងអស់",
   },
   review: {
+    stake: "ប្រាក់ចាក់",
+    discount: "បញ្ចុះតម្លៃ",
+    pay: "ប្រាក់ត្រូវបង់",
     cannot: "មិនអាចចាក់បាន",
     success: "ចាក់បានសម្រេច",
     title: "ពិនិត្យសន្លឹកចាក់",
@@ -121,6 +149,10 @@ export const play: typeof th = {
     meta: "{code} · {time} · {n} មុខ",
   },
   bill: {
+    package: "កញ្ចប់",
+    standard: "ស្តង់ដារ",
+    discount: "បញ្ចុះតម្លៃ",
+    paid: "ប្រាក់បានបង់ជាក់ស្តែង",
     won: "ឈ្នះរង្វាន់",
     paidIn: "ប្រាក់រង្វាន់ចូលកាបូបហើយ",
     closes: "{label} · បិទម៉ោង {time}",

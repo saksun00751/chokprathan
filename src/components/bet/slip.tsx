@@ -3,16 +3,19 @@
 import { Trash2, X } from "lucide-react";
 import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
 import { formatBaht, formatRate } from "chokprathan-core/rules/money";
+import { liveRate } from "@/domain/bet-packages";
+import type { Dict } from "@/i18n/dictionaries";
 import { RateChip } from "@/components/ui/rate-chip";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatNumber } from "@/i18n/format";
 import { cn } from "@/lib/cn";
-import { liveRate, type BadgeMap, type ConfigMap, type SlipItem } from "./types";
+import { itemKey, type BadgeMap, type ConfigMap, type SlipItem } from "./types";
 
 export function SlipList({
   items,
   configs,
   badges,
+  labels,
   onStake,
   onRemove,
   disabled,
@@ -20,6 +23,7 @@ export function SlipList({
   items: SlipItem[];
   configs: ConfigMap;
   badges: BadgeMap;
+  labels: Dict["lotto"]["betTypes"];
   onStake: (key: string, stake: number) => void;
   onRemove: (key: string) => void;
   disabled?: boolean;
@@ -30,6 +34,8 @@ export function SlipList({
     const list = items.filter((i) => i.betType === code);
     return cfg && list.length ? [{ cfg, list }] : [];
   });
+  // Numbers the current package no longer takes stay visible, so nothing is sent unseen.
+  const stray = items.filter((i) => !configs.has(i.betType));
 
   return (
     <div className="flex flex-col gap-4">
@@ -43,7 +49,7 @@ export function SlipList({
           </header>
           <ul className="divide-y divide-line rounded-control border border-line bg-surface">
             {list.map((item) => {
-              const rate = liveRate(badges, cfg, item.number);
+              const rate = liveRate(cfg.rate100, badges.get(itemKey(cfg.code, item.number)));
               const invalid = item.stake < cfg.minStake || item.stake > cfg.maxPerNumber;
               return (
                 <li key={item.key} className="grid grid-cols-[3.25rem_minmax(0,1fr)_5.5rem_2.25rem] items-center gap-2 py-2 pr-1 pl-3">
@@ -84,13 +90,30 @@ export function SlipList({
           </ul>
         </section>
       ))}
+      {stray.length > 0 && (
+        <section aria-label={sl.notOffered}>
+          <h3 className="pb-1.5 text-sm font-semibold text-danger">{sl.notOffered}</h3>
+          <ul className="divide-y divide-line rounded-control border border-danger bg-surface">
+            {stray.map((item) => (
+              <li key={item.key} className="flex items-center gap-2 py-2 pr-1 pl-3 text-sm">
+                <span className="tnum w-12 text-lg font-semibold">{item.number}</span>
+                <span className="min-w-0 flex-1 truncate">{labels[item.betType].label}</span>
+                <button type="button" onClick={() => onRemove(item.key)} disabled={disabled} className="grid size-9 place-items-center rounded-full text-ink-3 hover:bg-danger-soft hover:text-danger" aria-label={fmt(sl.remove, { number: item.number })}>
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
 
-export function SlipTotals({ count, total, balance }: { count: number; total: number; balance: number }) {
+export function SlipTotals({ count, total, discount, balance }: { count: number; total: number; discount: number; balance: number }) {
   const sl = useI18n().t.play.slip;
-  const after = balance - total * 100;
+  const net = total * 100 - discount;
+  const after = balance - net;
   return (
     <dl className="flex flex-col gap-1 text-sm">
       <div className="flex justify-between">
@@ -99,6 +122,18 @@ export function SlipTotals({ count, total, balance }: { count: number; total: nu
         </dt>
         <dd className="tnum text-base font-semibold text-ink">฿{formatNumber(total)}</dd>
       </div>
+      {discount > 0 && (
+        <>
+          <div className="flex justify-between">
+            <dt className="text-ink-2">{sl.discount}</dt>
+            <dd className="tnum text-success">−฿{formatBaht(discount, { decimals: "auto" })}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-ink-2">{sl.pay}</dt>
+            <dd className="tnum text-base font-semibold text-ink">฿{formatBaht(net, { decimals: "auto" })}</dd>
+          </div>
+        </>
+      )}
       <div className="flex justify-between text-ink-3">
         <dt>{sl.after}</dt>
         <dd className={cn("tnum", after < 0 && "font-semibold text-danger")}>฿{formatBaht(after)}</dd>

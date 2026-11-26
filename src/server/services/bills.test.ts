@@ -215,6 +215,14 @@ describe.skipIf(!hasTestDb)("bills on MariaDB", () => {
       expect((await balanceOf(m)).balance).toBe(1_000_000);
     });
 
+    test("an unknown package is refused, by the quote and by placing", async () => {
+      const m = await makeUser("0811111111", 1_000_000);
+      const lines = [{ betType: "top2" as const, number: "25", stake: 100 }];
+      expect(await quoteBill(m, roundId, lines, now, 12345)).toMatchObject({ ok: false, error: "bad_package", lines: [] });
+      expect(await placeBill(m, roundId, lines, { now, packageId: 12345 })).toMatchObject({ ok: false, error: "invalid" });
+      expect((await balanceOf(m)).balance).toBe(1_000_000);
+    });
+
     test("changing the lottery after a bill does not move the round's prices", async () => {
       const m = await makeUser("0811111111", 1_000_000);
       await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 10 }], { now });

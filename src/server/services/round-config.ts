@@ -9,6 +9,12 @@ export async function getRoundConfig(roundId: number): Promise<{ version: number
   return row && config ? { version: row.version, config } : undefined;
 }
 
+/** The version a bill was priced against. */
+export async function getRoundConfigVersion(roundId: number, version: number): Promise<RoundConfig | undefined> {
+  const row = await q1<{ config: string }>("SELECT config FROM round_configs WHERE round_id = ? AND version = ?", roundId, version);
+  return (row && json.parse<RoundConfig | null>(row.config, null)) || undefined;
+}
+
 /** `getRoundConfig` for many rounds with one query; rounds without one are left out. */
 export async function latestRoundConfigs(roundIds: number[]): Promise<Map<number, RoundConfig>> {
   const out = new Map<number, RoundConfig>();
