@@ -211,6 +211,46 @@ async function persist(userId: number, productId: string, snap: Snapshot, out: O
     await insertMany("game_moves", ["user_id", "product_id", "txn_id", "action", "amount", "shortfall", "balance_after", "request_id", "created_at"], rows);
 }
 
+/**
+ * Satang of debt repayments that came out of the credits of these transactions and have not been put
+ * back yet. A collection is written by the same callback as its credit, so both carry its time.
+ */
+async function repaidFromCredits(userId: number, productId: string, txnIds: string[]): Promise<number> {
+  const calls = (
+    await q<{ at: number }>("SELECT DISTINCT created_at AS at FROM game_moves WHERE user_id = ? AND product_id = ? AND txn_id IN (?) AND amount > 0", userId, productId, txnIds)
+  ).map((r) => r.at);
+  if (calls.length === 0) return 0;
+  const repaid = await q1<{ n: number | string | null }>(
+    "SELECT -SUM(amount) AS n FROM transactions WHERE user_id = ? AND type = 'debt_repay' AND created_at IN (?)",
+    userId,
+    calls,
+  );
+  const returned = await q1<{ n: number | string | null }>(
+    `SELECT SUM(shortfall) AS n FROM game_moves WHERE user_id = ? AND shortfall > 0 AND txn_id IN
+       (SELECT txn_id FROM game_moves WHERE user_id = ? AND created_at IN (?) AND amount > 0)`,
+    userId,
+    userId,
+    calls,
+  );
+  return Math.max(0, Number(repaid?.n ?? 0) - Number(returned?.n ?? 0));
+}
+
+/** Owe again what was repaid with money the provider has now taken back, latest debt first. */
+async function restoreDebt(userId: number, amount: number) {
+  const debts = await q<{ id: number; paid: number | string }>(
+    `SELECT id, amount - outstanding - written_off AS paid FROM member_debts
+     WHERE user_id = ? AND amount - outstanding - written_off > 0 ORDER BY id DESC FOR UPDATE`,
+    userId,
+  );
+  let left = amount;
+  for (const debt of debts) {
+    const part = Math.min(left, Number(debt.paid));
+    if (part <= 0) break;
+    left -= part;
+    await run("UPDATE member_debts SET outstanding = outstanding + ? WHERE id = ?", part, debt.id);
+  }
+}
+
 /** Handle one aggregator callback; always answers with a status code the aggregator understands. */
 export async function handleCallback(action: Callback, body: unknown, now = Date.now()): Promise<Record<string, unknown>> {
   const b = isRecord(body) ? body : {};
@@ -240,10 +280,7 @@ export async function handleCallback(action: Callback, body: unknown, now = Date
     const txns = parseTxns(b.txns);
     if (!txns) return reply(SC.forbidden);
     const requestId = str(b.id, 80) ?? null;
-    // satang the callback added to the balance
-    let credited = 0;
-    const answer = await tx(async () => {
-      credited = 0;
+    return await tx(async () => {
       const u = await q1<UserRow>(
         "SELECT id, role, status, balance, phone, name, bank_code, bank_account, bank_name FROM users WHERE id = ? FOR UPDATE",
         userId,
@@ -257,18 +294,20 @@ export async function handleCallback(action: Callback, body: unknown, now = Date
       const snap = await snapshotFor(userId, productId, txns, balance);
       const out = ENGINE[action](snap, txns);
       if (out.code === SC.ok) {
+        // Money taken back that is no longer there may have gone to a debt. Counted before this
+        // callback records its own shortfall.
+        const short = out.moves.filter((m) => m.shortfall > 0);
+        const repaid = short.length ? await repaidFromCredits(userId, productId, short.map((m) => m.txnId)) : 0;
         await persist(userId, productId, snap, out, requestId, now);
-        credited = out.balanceAfter - out.balanceBefore;
+        const restore = Math.min(repaid, short.reduce((sum, m) => sum + m.shortfall, 0));
+        if (restore > 0) await restoreDebt(userId, restore);
+        // New money repays what is owed in this same transaction, so a win is never kept by a
+        // failed second step. The provider is still told its own figures, before collection.
+        const credited = out.balanceAfter - out.balanceBefore;
+        if (credited > 0) await collectDebt({ q, q1, run }, userId, "balance", credited, now);
       }
       return reply(out.code, { balanceBefore: toBaht(out.balanceBefore), balanceAfter: toBaht(out.balanceAfter) });
     });
-    // After the callback is committed, so the figures the provider is given stay its own.
-    if (credited > 0) {
-      await tx(() => collectDebt({ q, q1, run }, userId, "balance", credited, now)).catch((error) =>
-        console.error("[games] debt collection failed:", error instanceof Error ? error.message : error),
-      );
-    }
-    return answer;
   } catch (error) {
     if (error instanceof Collision) return reply(SC.duplicate);
     if (!notMigrated(error)) console.error("[games] callback failed:", action, error instanceof Error ? error.message : error);

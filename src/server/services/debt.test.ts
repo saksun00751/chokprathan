@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { json, q, q1, run } from "@/server/db";
 import { giveRoundsConfig } from "@/server/db/seed-configs";
 import { hasTestDb, resetDb } from "@/test/db";
 import { cancelBill, placeBill } from "./bills";
-import { approveWithdrawal, rejectWithdrawal, requestWithdrawal } from "./finance";
+import { approveDeposit, approveWithdrawal, rejectWithdrawal, requestWithdrawal } from "./finance";
 import { handleCallback } from "./games";
 import { redeemVoucher } from "./retention";
 import { settlePending } from "./settlement";
@@ -82,7 +82,7 @@ describe.skipIf(!hasTestDb)("money coming in repays a member's debt first", () =
     expect(await q1("SELECT total_payout FROM bills WHERE id = ?", first.billId)).toEqual({ total_payout: 950_000 });
   });
 
-  test("a game win is collected after the provider has its answer", async () => {
+  test("a game win is collected, and the provider is told the figures before collection", async () => {
     await run("UPDATE users SET balance = 100000 WHERE id = ?", user);
     const call = (action: Parameters<typeof handleCallback>[0], txns: object[]) =>
       handleCallback(action, { id: `req-${Math.random()}`, productId: "PGSOFT", currency: "THB", username: `cp${String(user).padStart(6, "0")}`, timestampMillis: now, txns }, now);
@@ -96,6 +96,80 @@ describe.skipIf(!hasTestDb)("money coming in repays a member's debt first", () =
     // Only the 500 baht just won is taken; the 800 already held stays.
     expect((await wallets()).balance).toBe(80_000);
     expect(await owed()).toBe(1_000_000 - 50_000);
+  });
+
+  const game = (action: Parameters<typeof handleCallback>[0], txns: object[], at = now) =>
+    handleCallback(action, { id: `req-${Math.random()}`, productId: "PGSOFT", currency: "THB", username: `cp${String(user).padStart(6, "0")}`, timestampMillis: at, txns }, at);
+  const stake = (id: string, betAmount: number, at = now) => game("placeBets", [{ id, roundId: id, status: "OPEN", betAmount }], at);
+  const win = (id: string, payoutAmount: number, at = now) => game("settleBets", [{ id, roundId: id, status: "SETTLED", payoutAmount, betAmount: 0, transactionType: "BY_TRANSACTION" }], at);
+  const takeBack = (id: string, at = now) => game("rollback", [{ id, roundId: id, status: "OPEN", transactionType: "BY_TRANSACTION" }], at);
+
+  test("a game win and its collection happen together or not at all", async () => {
+    await run("UPDATE users SET balance = 20000 WHERE id = ?", user);
+    await stake("T9", 200);
+    await owe(10_000);
+    // Make the repayment itself fail.
+    await run("CREATE TRIGGER debt_repay_fails BEFORE INSERT ON transactions FOR EACH ROW BEGIN IF NEW.type = 'debt_repay' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'repayment failed'; END IF; END");
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await win("T9", 500, now + 1)).statusCode).not.toBe(0);
+    } finally {
+      quiet.mockRestore();
+      await run("DROP TRIGGER debt_repay_fails");
+    }
+    expect((await wallets()).balance).toBe(0);
+    // The provider sends it again and this time both happen.
+    expect((await win("T9", 500, now + 2)).statusCode).toBe(0);
+    expect((await wallets()).balance).toBe(40_000);
+    expect(await owed()).toBe(0);
+  });
+
+  test("a win taken back after it repaid a debt puts that debt back", async () => {
+    await run("UPDATE users SET balance = 20000 WHERE id = ?", user);
+    await stake("T1", 200);
+    await owe(50_000);
+    await win("T1", 500, now + 1);
+    expect([await owed(), (await wallets()).balance]).toEqual([0, 0]);
+    expect((await takeBack("T1", now + 2)).statusCode).toBe(0);
+    expect([await owed(), (await wallets()).balance]).toEqual([50_000, 0]);
+  });
+
+  test("restores no more than the win had repaid", async () => {
+    await run("UPDATE users SET balance = 20000 WHERE id = ?", user);
+    await stake("T2", 200);
+    await owe(20_000);
+    await win("T2", 500, now + 1);
+    await run("UPDATE users SET balance = 0 WHERE id = ?", user); // the rest is spent
+    await takeBack("T2", now + 2);
+    expect(await owed()).toBe(20_000);
+  });
+
+  test("restores nothing for a debt a deposit repaid", async () => {
+    await run("UPDATE users SET balance = 20000 WHERE id = ?", user);
+    await stake("T3", 200);
+    await win("T3", 500, now + 1);
+    await run("UPDATE users SET balance = 0 WHERE id = ?", user);
+    await owe(30_000);
+    await move(user, "balance", 30_000, "deposit", { now: now + 2 });
+    await takeBack("T3", now + 3);
+    expect(await owed()).toBe(0);
+  });
+
+  test("a deposit made while owing earns no bonus and adds no turnover", async () => {
+    const promo = (await run("INSERT INTO promotions (title, summary, details, bonus_percent, turnover_x, once_per_user, created_at) VALUES ('p', 'p', 'p', 100, 3, 0, 1)")).lastId;
+    const deposit = async () =>
+      (await run("INSERT INTO deposits (user_id, amount, promotion_id, status, expires_at, created_at) VALUES (?, 50000, ?, 'pending', ?, ?)", user, promo, now + 10_000, now)).lastId;
+    const after = () => q1("SELECT balance, turnover_required FROM users WHERE id = ?", user);
+
+    await owe(100_000);
+    expect((await approveDeposit(await deposit(), null, now)).ok).toBe(true);
+    expect(await after()).toEqual({ balance: 0, turnover_required: 0 });
+    expect(await owed()).toBe(50_000);
+    expect(await q("SELECT 1 FROM promotion_claims")).toEqual([]);
+
+    await run("UPDATE member_debts SET outstanding = 0 WHERE user_id = ?", user);
+    expect((await approveDeposit(await deposit(), null, now + 1)).ok).toBe(true);
+    expect(await after()).toEqual({ balance: 100_000, turnover_required: 300_000 });
   });
 
   test("withdrawals are refused while anything is owed", async () => {
