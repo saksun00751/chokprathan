@@ -1,10 +1,10 @@
 import "server-only";
-import { outstandingDebt } from "chokprathan-core/wallet/debt";
+import { outstandingDebt } from "@/core/wallet/debt";
 import { fmt } from "@/i18n/format";
 import { errorsT } from "@/i18n/server";
 import { randomInt } from "node:crypto";
-import { formatBaht } from "chokprathan-core/rules/money";
-import { dayKey, dayStartMs } from "chokprathan-core/rules/time";
+import { formatBaht } from "@/core/rules/money";
+import { dayKey, dayStartMs } from "@/core/rules/time";
 import { json, q, q1, run, tx } from "@/server/db";
 import { audit } from "./audit";
 import { bankMove, payoutAccounts, receivingAccount } from "./banks";

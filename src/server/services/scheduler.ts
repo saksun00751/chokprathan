@@ -4,7 +4,7 @@ import { outsideTx, q1, run, tolerateMissingTable, withLock } from "@/server/db"
 import { invalidate } from "@/server/cache";
 import { ambReady } from "@/server/amb";
 import { closeGameDay, syncCatalog } from "./games";
-import { dayKey, dayStartMs } from "chokprathan-core/rules/time";
+import { dayKey, dayStartMs } from "@/core/rules/time";
 import { pruneSessions } from "./auth";
 import { pruneRateLimits } from "./ratelimit";
 

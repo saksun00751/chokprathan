@@ -2,7 +2,7 @@ import "server-only";
 import { io } from "next/cache";
 import { billMoney } from "@/domain/bet-packages";
 import type { BillStatus } from "@/domain/labels";
-import type { BetTypeCode, ResultFormat, RoundResult, Segment } from "chokprathan-core/rules/types";
+import type { BetTypeCode, ResultFormat, RoundResult, Segment } from "@/core/rules/types";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { json, q, q1 } from "@/server/db";

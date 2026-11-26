@@ -1,11 +1,11 @@
 /**
  * What the betting and bill screens need to know about price packages. Pure, shared by the browser and
- * the server. Money rules stay in chokprathan-core; the server prices every slip again.
+ * the server. Money rules stay in src/core; the server prices every slip again.
  */
-import { betRules, slipKey, type SlipLine } from "chokprathan-core/rules/quote";
-import { discountOf, type RoundConfig } from "chokprathan-core/rules/roundConfig";
-import { MAX_PASTE_LINES, parseSlipText, type PasteErrorReason } from "chokprathan-core/rules/slip";
-import type { BetTypeCode } from "chokprathan-core/rules/types";
+import { betRules, slipKey, type SlipLine } from "@/core/rules/quote";
+import { discountOf, type RoundConfig } from "@/core/rules/roundConfig";
+import { MAX_PASTE_LINES, parseSlipText, type PasteErrorReason } from "@/core/rules/slip";
+import type { BetTypeCode } from "@/core/rules/types";
 
 export const STANDARD_PACKAGE = "standard";
 

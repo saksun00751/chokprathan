@@ -1,5 +1,5 @@
 import "server-only";
-import { collectDebt } from "chokprathan-core/wallet/debt";
+import { collectDebt } from "@/core/wallet/debt";
 import { randomUUID } from "node:crypto";
 import { ambUsername, groupOf, productName, userIdOf } from "@/domain/game-products";
 import {
@@ -22,7 +22,7 @@ import {
   type StatusCode,
   type WireTxn,
 } from "@/domain/seamless";
-import { dayStartMs } from "chokprathan-core/rules/time";
+import { dayStartMs } from "@/core/rules/time";
 import { insertMany, json, q, q1, run, tolerateMissingTable, tx } from "@/server/db";
 import { ambCurrency, ambGames, ambLogin, ambPrefix, ambProducts, ambReady, type AmbGame } from "@/server/amb";
 import { isBlocked } from "./blocklist";

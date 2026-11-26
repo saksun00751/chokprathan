@@ -1,5 +1,5 @@
 import "server-only";
-import type { RoundConfig } from "chokprathan-core/rules/roundConfig";
+import type { RoundConfig } from "@/core/rules/roundConfig";
 import { json, q, q1 } from "@/server/db";
 import { getLotto } from "./lottos";
 import { toRound, type Round, type RoundRow } from "./rounds";

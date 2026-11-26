@@ -3,7 +3,7 @@ import { MenuArt } from "@/components/art/scenes";
 import { Rays } from "@/components/art/pieces";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, PageHeader, Skeleton } from "@/components/ui/primitives";
-import { formatBaht } from "chokprathan-core/rules/money";
+import { formatBaht } from "@/core/rules/money";
 import { fmt, formatDate } from "@/i18n/format";
 import { getI18n, pageMeta } from "@/i18n/rsc";
 import { getNews, getPromotions } from "@/server/data/member";

@@ -1,9 +1,9 @@
 "use client";
 
 import { Trash2, X } from "lucide-react";
-import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
-import { formatBaht, formatRate } from "chokprathan-core/rules/money";
-import { MAX_STAKE } from "chokprathan-core/rules/slip";
+import { BET_TYPE_ORDER } from "@/core/rules/betTypes";
+import { formatBaht, formatRate } from "@/core/rules/money";
+import { MAX_STAKE } from "@/core/rules/slip";
 import { liveRate } from "@/domain/bet-packages";
 import type { Dict } from "@/i18n/dictionaries";
 import { RateChip } from "@/components/ui/rate-chip";

@@ -1,8 +1,8 @@
 import "server-only";
-import { collectDebt } from "chokprathan-core/wallet/debt";
+import { collectDebt } from "@/core/wallet/debt";
 import { maskPhone } from "@/domain/banks";
-import { isWinning } from "chokprathan-core/rules/match";
-import type { BetTypeCode, RoundResult } from "chokprathan-core/rules/types";
+import { isWinning } from "@/core/rules/match";
+import type { BetTypeCode, RoundResult } from "@/core/rules/types";
 import { invalidate } from "@/server/cache";
 import { insertMany, json, q, q1, run, tx, type SqlValue } from "@/server/db";
 import type { RewardSettings } from "@/server/catalog";

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { bkkMs } from "chokprathan-core/rules/time";
+import { bkkMs } from "@/core/rules/time";
 import { fmt } from "@/i18n/format";
 import th from "@/i18n/locales/th";
 import { json, q, q1, run } from "@/server/db";

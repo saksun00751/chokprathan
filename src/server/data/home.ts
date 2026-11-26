@@ -1,6 +1,6 @@
 import "server-only";
 import { io } from "next/cache";
-import type { BetTypeCode } from "chokprathan-core/rules/types";
+import type { BetTypeCode } from "@/core/rules/types";
 import { lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { q1 } from "@/server/db";

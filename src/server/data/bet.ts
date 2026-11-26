@@ -1,8 +1,8 @@
 import "server-only";
 import { io } from "next/cache";
-import { betRules } from "chokprathan-core/rules/quote";
+import { betRules } from "@/core/rules/quote";
 import { rebetPlan, STANDARD_PACKAGE } from "@/domain/bet-packages";
-import type { BetTypeCode, LottoGroup, ResultFormat } from "chokprathan-core/rules/types";
+import type { BetTypeCode, LottoGroup, ResultFormat } from "@/core/rules/types";
 import { lottoName, lottoShort, roundName, scheduledClose } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { json, q, q1 } from "@/server/db";

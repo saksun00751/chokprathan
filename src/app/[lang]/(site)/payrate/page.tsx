@@ -4,7 +4,7 @@ import { Flag } from "@/components/ui/flag";
 import { Card, PageHeader, SectionTitle, Skeleton } from "@/components/ui/primitives";
 import { discountPercent } from "@/domain/bet-packages";
 import { byGroup } from "@/domain/lotto-groups";
-import { formatRate } from "chokprathan-core/rules/money";
+import { formatRate } from "@/core/rules/money";
 import { fmt, formatNumber } from "@/i18n/format";
 import { getI18n, pageMeta } from "@/i18n/rsc";
 import { getGroups } from "@/server/data/groups";

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { RoundConfig } from "chokprathan-core/rules/roundConfig";
+import type { RoundConfig } from "@/core/rules/roundConfig";
 import { advertisedRates, rebetPlan, betWindow, billMoney, discountPercent, liveRate, mergeLines, packageRows, parsePackageId, planPaste, slipDue, unofferedLines } from "./bet-packages";
 
 const offered = new Map([

@@ -3,7 +3,7 @@ import { q1, run } from "@/server/db";
 import { hasTestDb, resetDb } from "@/test/db";
 import { ensureRounds, setResult } from "./rounds";
 import { settlePending } from "./settlement";
-import { bkkMs } from "chokprathan-core/rules/time";
+import { bkkMs } from "@/core/rules/time";
 
 const now = bkkMs(2026, 11, 4, 12, 0);
 

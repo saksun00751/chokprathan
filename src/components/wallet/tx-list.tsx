@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { EmptyState, Money } from "@/components/ui/primitives";
-import { formatBaht } from "chokprathan-core/rules/money";
+import { formatBaht } from "@/core/rules/money";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatDateTime } from "@/i18n/format";
 import { cn } from "@/lib/cn";

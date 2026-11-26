@@ -1,7 +1,7 @@
 import "server-only";
 import { io } from "next/cache";
-import { betTypesFor } from "chokprathan-core/rules/betTypes";
-import type { BetTypeCode, RiskProfile } from "chokprathan-core/rules/types";
+import { betTypesFor } from "@/core/rules/betTypes";
+import type { BetTypeCode, RiskProfile } from "@/core/rules/types";
 import { advertisedRates, packageRows, STANDARD_PACKAGE } from "@/domain/bet-packages";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";

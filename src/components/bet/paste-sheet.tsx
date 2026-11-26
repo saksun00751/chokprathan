@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { SlipLine } from "chokprathan-core/rules/quote";
-import type { BetTypeCode } from "chokprathan-core/rules/types";
+import type { SlipLine } from "@/core/rules/quote";
+import type { BetTypeCode } from "@/core/rules/types";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { planPaste } from "@/domain/bet-packages";

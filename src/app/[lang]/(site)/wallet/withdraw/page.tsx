@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { Card, Money, PageHeader, Skeleton } from "@/components/ui/primitives";
 import { maskAccount } from "@/domain/banks";
-import { formatBaht } from "chokprathan-core/rules/money";
+import { formatBaht } from "@/core/rules/money";
 import { fmt, formatDateTime } from "@/i18n/format";
 import { bankName } from "@/i18n/labels";
 import { getI18n, pageMeta } from "@/i18n/rsc";

@@ -1,6 +1,6 @@
 import "server-only";
-import { BET_TYPES, betTypesFor } from "chokprathan-core/rules/betTypes";
-import type { BetTypeCode, LottoGroup, ResultFormat, RiskProfile, Schedule } from "chokprathan-core/rules/types";
+import { BET_TYPES, betTypesFor } from "@/core/rules/betTypes";
+import type { BetTypeCode, LottoGroup, ResultFormat, RiskProfile, Schedule } from "@/core/rules/types";
 import { invalidate, memo } from "@/server/cache";
 import { LOTTOS_TTL_MS } from "@/server/cache-ttl";
 import { afterCommit, json, q } from "@/server/db";

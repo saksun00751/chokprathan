@@ -3,7 +3,7 @@ import { fmt } from "@/i18n/format";
 import { errorsT } from "@/i18n/server";
 import { createHash, randomBytes, randomInt, scrypt as scryptCallback, scryptSync, timingSafeEqual, type ScryptOptions } from "node:crypto";
 import { endedParam, type SessionEnd } from "@/domain/sessions";
-import { DAY, MINUTE } from "chokprathan-core/rules/time";
+import { DAY, MINUTE } from "@/core/rules/time";
 import { q, q1, run, tolerateMissingTable, tx } from "@/server/db";
 import { writeAuthLog } from "@/server/logs";
 

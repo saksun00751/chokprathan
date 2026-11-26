@@ -1,8 +1,8 @@
 import "server-only";
 import { io } from "next/cache";
-import type { BetTypeCode, LottoGroup, RoundResult } from "chokprathan-core/rules/types";
+import type { BetTypeCode, LottoGroup, RoundResult } from "@/core/rules/types";
 import type { Dict } from "@/i18n/dictionaries";
-import type { RoundConfig } from "chokprathan-core/rules/roundConfig";
+import type { RoundConfig } from "@/core/rules/roundConfig";
 import { advertisedRates } from "@/domain/bet-packages";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { latestRoundConfigs } from "@/server/services/round-config";

@@ -1,8 +1,8 @@
 import "server-only";
-import { outstandingDebt } from "chokprathan-core/wallet/debt";
+import { outstandingDebt } from "@/core/wallet/debt";
 import { pointsOf } from "@/server/services/points";
 import { io } from "next/cache";
-import { dayKey, dayStartMs } from "chokprathan-core/rules/time";
+import { dayKey, dayStartMs } from "@/core/rules/time";
 import { lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { json, q, q1, run } from "@/server/db";

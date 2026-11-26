@@ -1,5 +1,5 @@
 import "server-only";
-import { buildRoundConfig } from "chokprathan-core/rules/roundConfig";
+import { buildRoundConfig } from "@/core/rules/roundConfig";
 import { invalidate } from "@/server/cache";
 import { json, q, q1, run } from "@/server/db";
 import { betConfigs, billLimits, listLottos } from "@/server/services/lottos";

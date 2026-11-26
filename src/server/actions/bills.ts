@@ -2,8 +2,8 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
-import { MAX_STAKE } from "chokprathan-core/rules/slip";
+import { BET_TYPE_ORDER } from "@/core/rules/betTypes";
+import { MAX_STAKE } from "@/core/rules/slip";
 import { fmt } from "@/i18n/format";
 import { errorsT } from "@/i18n/server";
 import { parsePackageId } from "@/domain/bet-packages";

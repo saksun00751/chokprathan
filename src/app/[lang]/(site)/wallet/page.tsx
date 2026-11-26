@@ -6,7 +6,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Badge, Card, Money, PageHeader, SectionTitle, Skeleton } from "@/components/ui/primitives";
 import { TxList } from "@/components/wallet/tx-list";
 import { maskAccount } from "@/domain/banks";
-import { formatBaht } from "chokprathan-core/rules/money";
+import { formatBaht } from "@/core/rules/money";
 import { fmt, formatDateTime } from "@/i18n/format";
 import { bankShort } from "@/i18n/labels";
 import { getI18n, pageMeta } from "@/i18n/rsc";

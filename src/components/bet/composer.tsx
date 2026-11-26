@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { BookmarkPlus, Check, ChevronUp, ClipboardPaste, Info, Keyboard, Grid3x3, ListChecks, Shuffle } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
-import { formatBaht, formatRate } from "chokprathan-core/rules/money";
-import { doubles, nineteenDoors, permutations, swipeBack, swipeFront, triples } from "chokprathan-core/rules/numbers";
-import type { SlipLine } from "chokprathan-core/rules/quote";
-import { pairGroup } from "chokprathan-core/rules/slip";
-import type { BetTypeCode } from "chokprathan-core/rules/types";
+import { BET_TYPE_ORDER } from "@/core/rules/betTypes";
+import { formatBaht, formatRate } from "@/core/rules/money";
+import { doubles, nineteenDoors, permutations, swipeBack, swipeFront, triples } from "@/core/rules/numbers";
+import type { SlipLine } from "@/core/rules/quote";
+import { pairGroup } from "@/core/rules/slip";
+import type { BetTypeCode } from "@/core/rules/types";
 import { betWindow, discountPercent, liveRate, mergeLines, slipDue, unofferedLines } from "@/domain/bet-packages";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatClock, formatDate, formatNumber } from "@/i18n/format";

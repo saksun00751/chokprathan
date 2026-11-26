@@ -1,7 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { formatBaht } from "chokprathan-core/rules/money";
+import { formatBaht } from "@/core/rules/money";
 import { fmt } from "@/i18n/format";
 import { errorsT } from "@/i18n/server";
 import type { ActionResult } from "@/lib/action";

@@ -1,9 +1,9 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { BET_TYPES, betTypesFor } from "chokprathan-core/rules/betTypes";
-import { DAY, HOUR, MINUTE } from "chokprathan-core/rules/time";
-import type { BetTypeCode, ResultFormat, RoundResult } from "chokprathan-core/rules/types";
-import { deriveResult } from "chokprathan-core/rules/match";
+import { BET_TYPES, betTypesFor } from "@/core/rules/betTypes";
+import { DAY, HOUR, MINUTE } from "@/core/rules/time";
+import type { BetTypeCode, ResultFormat, RoundResult } from "@/core/rules/types";
+import { deriveResult } from "@/core/rules/match";
 import { DEFAULT_SITE, DEFAULT_WALLET, LOTTO_CATALOG } from "@/server/catalog";
 import { hashPasswordSync } from "@/server/services/auth";
 import { placeBill, type SlipLine } from "@/server/services/bills";

@@ -4,7 +4,7 @@ import { getRoundConfig } from "@/server/services/round-config";
 import { scheduledClose } from "@/i18n/labels";
 import { io } from "next/cache";
 import type { ArtKey } from "@/components/art/keys";
-import { formatRate } from "chokprathan-core/rules/money";
+import { formatRate } from "@/core/rules/money";
 import { fmt, formatDate } from "@/i18n/format";
 import { getI18n } from "@/i18n/rsc";
 import { q1 } from "@/server/db";
