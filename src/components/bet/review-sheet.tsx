@@ -9,6 +9,7 @@ import { Countdown } from "@/components/ui/clock";
 import { Sheet } from "@/components/ui/sheet";
 import { useI18n } from "@/i18n/client";
 import { fmt, formatNumber } from "@/i18n/format";
+import { answered } from "@/lib/action";
 import { cn } from "@/lib/cn";
 import { placeSlipAction, quoteSlipAction } from "@/server/actions/bills";
 import type { LineQuote, Quote } from "@/server/services/bills";
@@ -70,8 +71,9 @@ export function ReviewSheet({
     if (!open || placed) return;
     let cancelled = false;
     const [sentPackage, sentLines] = JSON.parse(signature);
-    quoteSlipAction(roundId, sentLines, sentPackage).then((r) => {
+    answered(quoteSlipAction(roundId, sentLines, sentPackage)).then((r) => {
       if (cancelled) return;
+      if (!r) return setQuoted({ sig: signature, quote: null, message: { tone: "danger", text: rv.quoteLost } });
       setQuoted(
         r.ok
           ? { sig: signature, quote: r.data, message: r.data.error ? { tone: "danger", text: r.data.message ?? rv.cannot } : null }
@@ -81,7 +83,7 @@ export function ReviewSheet({
     return () => {
       cancelled = true;
     };
-  }, [open, placed, roundId, signature, rv.cannot]);
+  }, [open, placed, roundId, signature, rv.cannot, rv.quoteLost]);
 
   const close = () => {
     if (placed) onPlaced();
@@ -96,7 +98,10 @@ export function ReviewSheet({
       if (attempt.current?.sig !== signature) {
         attempt.current = { sig: signature, id: Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("") };
       }
-      const r = await placeSlipAction(roundId, lines, { expected: quote.fingerprint, acceptChanges: accept, requestId: attempt.current.id, packageId });
+      const r = await answered(placeSlipAction(roundId, lines, { expected: quote.fingerprint, acceptChanges: accept, requestId: attempt.current.id, packageId }));
+      // No answer: the bill may or may not exist. Keep the slip and the request id, so confirming
+      // again returns the same bill instead of making a second one.
+      if (!r) return setQuoted({ sig: signature, quote, message: { tone: "warning", text: rv.lost } });
       if (!r.ok) return setQuoted({ sig: signature, quote, message: { tone: "danger", text: r.error } });
       const result = r.data;
       if (result.ok) {
@@ -246,7 +251,7 @@ function QuoteRow({ line, onFix }: { line: LineQuote; onFix: (stake: number | nu
           <span className="block text-sm font-medium text-danger">{line.message}</span>
         </span>
         <span className="flex gap-1.5">
-          {line.reason === "cap" && (line.remaining ?? 0) > 0 && (
+          {(line.reason === "cap" || line.reason === "max") && (line.remaining ?? 0) > 0 && (
             <Button size="sm" variant="secondary" onClick={() => onFix(line.remaining!)}>
               {fmt(rv.reduceTo, { amount: formatNumber(line.remaining!) })}
             </Button>

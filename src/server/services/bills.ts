@@ -177,8 +177,13 @@ function quoteLines(roundId: number, lines: SlipLine[], now: number, { e, betLab
         return fmt(m.digits, { n: BET_TYPES[l.betType].digits });
       case "min":
         return fmt(m.minStake, { n: formatNumber(l.limit ?? 0) });
-      case "max":
-        return fmt(m.maxPerNumber, { n: formatNumber(l.limit ?? 0) });
+      case "max": {
+        const n = formatNumber(l.limit ?? 0);
+        const left = l.remaining ?? 0;
+        // Less than the whole limit is left only when the member already holds some of this number.
+        if (left >= (l.limit ?? 0)) return fmt(m.maxPerNumber, { n });
+        return left > 0 ? fmt(m.maxLeft, { n, left: formatNumber(left) }) : fmt(m.maxReached, { n });
+      }
       case "closed":
         return m.numberClosed;
       case "cap":

@@ -143,6 +143,8 @@ export const errors = {
     digits: "เลขต้องมี {n} หลัก",
     minStake: "แทงขั้นต่ำ {n} บาท",
     maxPerNumber: "แทงได้สูงสุด {n} บาทต่อเลข",
+    maxLeft: "สูงสุด {n} บาทต่อเลข เหลือแทงได้อีก {left} บาท",
+    maxReached: "เลขนี้คุณแทงครบ {n} บาทแล้ว",
     numberClosed: "เลขนี้ปิดรับแล้ว",
     remaining: "เลขนี้รับได้อีก {n} บาท",
     full: "เลขนี้รับเต็มแล้ว",

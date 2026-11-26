@@ -2,7 +2,10 @@ import "server-only";
 import { io } from "next/cache";
 import type { BetTypeCode, LottoGroup, RoundResult } from "chokprathan-core/rules/types";
 import type { Dict } from "@/i18n/dictionaries";
+import type { RoundConfig } from "chokprathan-core/rules/roundConfig";
+import { advertisedRates } from "@/domain/bet-packages";
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
+import { latestRoundConfigs } from "@/server/services/round-config";
 import { getI18n } from "@/i18n/rsc";
 import type { Locale } from "@/i18n/config";
 import { memo } from "@/server/cache";
@@ -32,8 +35,9 @@ export interface LobbyRound {
   cutCount: number;
 }
 
-export function toLobbyRound(round: Round, lotto: Lotto, now: number, settings: AllSettings, cutCount: number, lang: Locale, t: Dict): LobbyRound {
-  const configs = betConfigs(lotto, settings);
+export function toLobbyRound(round: Round, lotto: Lotto, now: number, settings: AllSettings, cutCount: number, lang: Locale, t: Dict, config?: RoundConfig): LobbyRound {
+  // Advertise what this round's bets are taken at.
+  const configs = advertisedRates(config, betConfigs(lotto, settings));
   const headlineCodes: BetTypeCode[] = lotto.format === "laos4" ? ["top4", "top3", "top2"] : ["top3", "top2"];
   return {
     id: round.id,
@@ -68,7 +72,7 @@ export interface LobbyData {
  * The round each lotto is taking bets for now (or its next one), plus upcoming Yiki rounds.
  * The same for every visitor, so it is built at most once every few seconds per instance.
  */
-type Picked = { round: Round; lotto: Lotto; yiki: boolean; cuts: number };
+type Picked = { round: Round; lotto: Lotto; yiki: boolean; cuts: number; config?: RoundConfig };
 
 function lobbySnapshot(): Promise<{ builtAt: number; picked: Picked[]; settings: AllSettings }> {
   return memo("lobby", LOBBY_TTL_MS, async () => {
@@ -101,7 +105,11 @@ function lobbySnapshot(): Promise<{ builtAt: number; picked: Picked[]; settings:
       picked.push({ round: r, lotto, yiki: false, cuts: 0 });
     }
     const cuts = await limitsForRounds(picked.map((p) => p.round.id));
-    for (const p of picked) p.cuts = cuts.get(p.round.id)?.length ?? 0;
+    const prices = await latestRoundConfigs(picked.map((p) => p.round.id));
+    for (const p of picked) {
+      p.cuts = cuts.get(p.round.id)?.length ?? 0;
+      p.config = prices.get(p.round.id);
+    }
     return { builtAt: now, picked, settings };
   });
 }
@@ -113,7 +121,7 @@ export async function getLobby(): Promise<LobbyData> {
   const now = Date.now();
   // Shared snapshot, then this request's language and clock.
   const live = snap.picked.filter((p) => p.round.closesAt > now);
-  const view = (p: Picked) => toLobbyRound(p.round, p.lotto, now, snap.settings, p.cuts, lang, t);
+  const view = (p: Picked) => toLobbyRound(p.round, p.lotto, now, snap.settings, p.cuts, lang, t, p.config);
   return { serverNow: now, rounds: live.filter((p) => !p.yiki).map(view), yiki: live.filter((p) => p.yiki).map(view) };
 }
 

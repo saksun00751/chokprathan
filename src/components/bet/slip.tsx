@@ -3,6 +3,7 @@
 import { Trash2, X } from "lucide-react";
 import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
 import { formatBaht, formatRate } from "chokprathan-core/rules/money";
+import { MAX_STAKE } from "chokprathan-core/rules/slip";
 import { liveRate } from "@/domain/bet-packages";
 import type { Dict } from "@/i18n/dictionaries";
 import { RateChip } from "@/components/ui/rate-chip";
@@ -66,7 +67,7 @@ export function SlipList({
                       value={item.stake === 0 ? "" : String(item.stake)}
                       inputMode="numeric"
                       disabled={disabled}
-                      onChange={(e) => onStake(item.key, Number(e.target.value.replace(/\D/g, "").slice(0, 7)) || 0)}
+                      onChange={(e) => onStake(item.key, Math.min(Number(e.target.value.replace(/\D/g, "").slice(0, 7)) || 0, MAX_STAKE))}
                       aria-invalid={invalid || undefined}
                       className={cn(
                         "tnum h-10 w-full rounded-[8px] border bg-surface pr-6 pl-2 text-right text-base font-semibold",

@@ -144,6 +144,8 @@ export const errors: typeof th = {
     digits: "Numbers must have {n} digits",
     minStake: "Minimum stake is {n} baht",
     maxPerNumber: "Maximum is {n} baht per number",
+    maxLeft: "At most ฿{n} per number; you can add ฿{left} more",
+    maxReached: "You already have the full ฿{n} on this number",
     numberClosed: "This number is closed",
     remaining: "This number can take {n} baht more",
     full: "This number is full",

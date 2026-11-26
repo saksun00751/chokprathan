@@ -144,6 +144,8 @@ export const errors: typeof th = {
     digits: "លេខត្រូវមាន {n} ខ្ទង់",
     minStake: "ចាក់អប្បបរមា {n} បាត",
     maxPerNumber: "ចាក់បានអតិបរមា {n} បាតក្នុងមួយលេខ",
+    maxLeft: "អតិបរមា {n} បាតក្នុងមួយលេខ អាចចាក់បន្ថែម {left} បាត",
+    maxReached: "លេខនេះអ្នកបានចាក់គ្រប់ {n} បាតហើយ",
     numberClosed: "លេខនេះបិទហើយ",
     remaining: "លេខនេះទទួលបាន {n} បាតទៀត",
     full: "លេខនេះពេញហើយ",

@@ -4,7 +4,7 @@
  */
 import { betRules, slipKey, type SlipLine } from "chokprathan-core/rules/quote";
 import { discountOf, type RoundConfig } from "chokprathan-core/rules/roundConfig";
-import { parseSlipText } from "chokprathan-core/rules/slip";
+import { MAX_PASTE_LINES, parseSlipText, type PasteErrorReason } from "chokprathan-core/rules/slip";
 import type { BetTypeCode } from "chokprathan-core/rules/types";
 
 export const STANDARD_PACKAGE = "standard";
@@ -58,7 +58,7 @@ export function mergeLines<T extends SlipLine>(have: T[], more: T[]): { lines: T
   return { lines: fresh.length ? [...have, ...fresh] : have, added: fresh.length };
 }
 
-export type PasteReason = "format" | "unoffered" | "closed" | "duplicate";
+export type PasteReason = PasteErrorReason | "unoffered" | "closed" | "duplicate";
 
 /**
  * Sort pasted text into lines to add and lines to show back for editing. A text line is taken whole
@@ -66,9 +66,19 @@ export type PasteReason = "format" | "unoffered" | "closed" | "duplicate";
  */
 export function planPaste(
   text: string,
-  { offered, taken, closed }: { offered: ReadonlyMap<BetTypeCode, unknown>; taken: ReadonlySet<string>; closed: ReadonlySet<string> },
+  {
+    offered,
+    taken,
+    closed,
+    room,
+  }: {
+    offered: ReadonlyMap<BetTypeCode, unknown>;
+    taken: ReadonlySet<string>;
+    closed: ReadonlySet<string>;
+    /** lines the slip can still take */
+    room: number;
+  },
 ): { add: SlipLine[]; rejected: { line: number; text: string; reason: PasteReason }[] } {
-  const unreadable = new Set(parseSlipText(text).errors.map((e) => e.line));
   const add: SlipLine[] = [];
   const rejected: { line: number; text: string; reason: PasteReason }[] = [];
   const used = new Set(taken);
@@ -77,12 +87,14 @@ export function planPaste(
     if (!trimmed) return;
     const line = i + 1;
     const reject = (reason: PasteReason) => void rejected.push({ line, text: trimmed, reason });
-    if (unreadable.has(line)) return reject("format");
-    const entries = parseSlipText(trimmed).lines;
+    // Line by line, so that only lines actually added count toward a limit.
+    const { lines: entries, errors } = parseSlipText(trimmed);
+    if (errors.length) return reject(errors[0].reason);
     const keys = entries.map((e) => slipKey(e.betType, e.number));
     if (entries.some((e) => !offered.has(e.betType))) return reject("unoffered");
     if (keys.some((k) => closed.has(k))) return reject("closed");
     if (new Set(keys).size !== keys.length || keys.some((k) => used.has(k))) return reject("duplicate");
+    if (add.length + entries.length > Math.min(room, MAX_PASTE_LINES)) return reject("limit");
     for (const k of keys) used.add(k);
     add.push(...entries);
   });
@@ -118,4 +130,20 @@ export function packageRows(config: RoundConfig) {
     name,
     rates: betRules(config, id).map((r) => ({ code: r.code, rate100: r.rate100, discountBp: r.discountBp })),
   }));
+}
+
+/** The rates to show for a lottery: its open round's standard prices, else the current settings. */
+export function advertisedRates(config: RoundConfig | undefined, current: { code: BetTypeCode; rate100: number }[]): { code: BetTypeCode; rate100: number }[] {
+  return config ? betRules(config).map(({ code, rate100 }) => ({ code, rate100 })) : current;
+}
+
+/**
+ * Betting an old bill again: on its package when this round still offers it, else on the standard
+ * (first) one. Counts the lines that package does not take, so the member is told.
+ */
+export function rebetPlan<T extends SlipLine>(packages: { id: number; types: ReadonlySet<BetTypeCode> }[], billPackageId: number | null, lines: T[]) {
+  const own = packages.find((p) => p.id === billPackageId);
+  const pack = own ?? packages[0];
+  const kept = lines.filter((l) => pack.types.has(l.betType));
+  return { packageId: pack.id, lines: kept, dropped: lines.length - kept.length, packageGone: billPackageId !== null && !own };
 }

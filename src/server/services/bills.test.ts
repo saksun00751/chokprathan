@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { bkkMs } from "chokprathan-core/rules/time";
+import { fmt } from "@/i18n/format";
+import th from "@/i18n/locales/th";
 import { json, q, q1, run } from "@/server/db";
 import { giveRoundsConfig } from "@/server/db/seed-configs";
 import { hasTestDb, resetDb } from "@/test/db";
@@ -144,6 +146,16 @@ describe.skipIf(!hasTestDb)("bills on MariaDB", () => {
       const r = await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 2001 }], { now });
       expect(r).toMatchObject({ ok: false, error: "invalid" });
       if (!r.ok && r.quote) expect(r.quote.lines[0]).toMatchObject({ ok: false, reason: "max" });
+    });
+
+    test("says how much more the member can still put on a number they already hold", async () => {
+      const m = await makeUser("0811111111", 10_000_000);
+      await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 1500 }], { now });
+      const over = await quoteBill(m, roundId, [{ betType: "top2", number: "25", stake: 600 }], now);
+      expect(over.lines[0]).toMatchObject({ reason: "max", remaining: 500, message: fmt(th.errors.bet.maxLeft, { n: "2,000", left: "500" }) });
+      await placeBill(m, roundId, [{ betType: "top2", number: "25", stake: 500 }], { now });
+      const full = await quoteBill(m, roundId, [{ betType: "top2", number: "25", stake: 1 }], now);
+      expect(full.lines[0]).toMatchObject({ reason: "max", remaining: 0, message: fmt(th.errors.bet.maxReached, { n: "2,000" }) });
     });
 
     test("a lotto-level risk override caps a number and reports the remaining room", async () => {

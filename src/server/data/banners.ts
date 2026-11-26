@@ -1,4 +1,6 @@
 import "server-only";
+import { advertisedRates } from "@/domain/bet-packages";
+import { getRoundConfig } from "@/server/services/round-config";
 import { scheduledClose } from "@/i18n/labels";
 import { io } from "next/cache";
 import type { ArtKey } from "@/components/art/keys";
@@ -61,7 +63,8 @@ export async function getHomeSlides(loggedIn: boolean): Promise<{ serverNow: num
   if (gov) {
     const round = toRound(gov);
     const lotto = (await getLotto(round.lottoId))!;
-    const rate = betConfigs(lotto, await getSettings()).find((c) => c.code === "top3")?.rate100 ?? 95000;
+    const current = betConfigs(lotto, await getSettings());
+    const rate = advertisedRates((await getRoundConfig(round.id))?.config, current).find((c) => c.code === "top3")?.rate100 ?? 95000;
     slides.splice(Math.min(1, slides.length), 0, {
       id: "gov",
       tag: g.tag,

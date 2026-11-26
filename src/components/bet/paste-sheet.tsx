@@ -16,6 +16,7 @@ export function PasteSheet({
   offered,
   taken,
   closed,
+  room,
   onAdd,
 }: {
   open: boolean;
@@ -23,11 +24,12 @@ export function PasteSheet({
   offered: ReadonlyMap<BetTypeCode, unknown>;
   taken: ReadonlySet<string>;
   closed: ReadonlySet<string>;
+  room: number;
   onAdd: (lines: SlipLine[]) => void;
 }) {
   const ps = useI18n().t.play.paste;
   const [text, setText] = useState("");
-  const { add, rejected } = planPaste(text, { offered, taken, closed });
+  const { add, rejected } = planPaste(text, { offered, taken, closed, room });
 
   const confirm = () => {
     onAdd(add);

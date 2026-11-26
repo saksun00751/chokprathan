@@ -1,14 +1,14 @@
 import "server-only";
 import { io } from "next/cache";
 import { betRules } from "chokprathan-core/rules/quote";
-import { STANDARD_PACKAGE } from "@/domain/bet-packages";
+import { rebetPlan, STANDARD_PACKAGE } from "@/domain/bet-packages";
 import type { BetTypeCode, LottoGroup, ResultFormat } from "chokprathan-core/rules/types";
 import { lottoName, lottoShort, roundName, scheduledClose } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { json, q, q1 } from "@/server/db";
 import type { SessionUser } from "@/server/services/auth";
 import { getLotto } from "@/server/services/lottos";
-import { getRoundConfig } from "@/server/services/round-config";
+import { getRoundConfig, unpricedRound } from "@/server/services/round-config";
 import { roundLimits, type LimitBadge } from "@/server/services/risk";
 import { getRound, phaseOf, toRound, type RoundPhase, type RoundRow } from "@/server/services/rounds";
 
@@ -49,6 +49,9 @@ export interface BetPageData {
   siblings: { id: number; label: string; closesAt: number }[];
   balance: number;
   initialLines: { betType: BetTypeCode; number: string; stake: number }[];
+  initialPackageId: number;
+  /** Set when betting a bill again could not carry everything over. */
+  rebetNotice: { dropped: number; packageGone: boolean } | null;
 }
 
 export async function getBetPage(roundId: number, viewer: SessionUser, rebetBillId?: number): Promise<BetPageData | null> {
@@ -72,12 +75,15 @@ export async function getBetPage(roundId: number, viewer: SessionUser, rebetBill
     q<{ id: number; name: string; items: string }>("SELECT id, name, items FROM number_sets WHERE user_id = ? ORDER BY created_at DESC LIMIT 50", viewer.id),
     roundLimits(round.id),
     rebetBillId
-      ? q1<{ id: number }>("SELECT id FROM bills WHERE id = ? AND user_id = ?", rebetBillId, viewer.id).then((bill) =>
+      ? q1<{ id: number; package_id: number | null }>("SELECT id, package_id FROM bills WHERE id = ? AND user_id = ?", rebetBillId, viewer.id).then(async (bill) =>
           bill
-            ? q<{ bet_type: BetTypeCode; number: string; stake: number }>("SELECT bet_type, number, stake FROM bill_items WHERE bill_id = ? ORDER BY id", bill.id)
-            : [],
+            ? {
+                packageId: bill.package_id,
+                items: await q<{ bet_type: BetTypeCode; number: string; stake: number }>("SELECT bet_type, number, stake FROM bill_items WHERE bill_id = ? ORDER BY id", bill.id),
+              }
+            : null,
         )
-      : Promise.resolve([]),
+      : Promise.resolve(null),
   ]);
 
   // The back office stores prices with each round; without them there is nothing to bet on yet.
@@ -98,6 +104,12 @@ export async function getBetPage(roundId: number, viewer: SessionUser, rebetBill
     })),
   }));
 
+  const plan = rebetPlan(
+    packages.map((p) => ({ id: p.id, types: new Set(p.configs.map((c) => c.code)) })),
+    rebet?.packageId ?? null,
+    (rebet?.items ?? []).map((i) => ({ betType: i.bet_type, number: i.number, stake: i.stake })),
+  );
+
   return {
     serverNow: now,
     round: { id: round.id, label: roundName(round, lang, t), scheduledCloseAt: scheduledClose(round), opensAt: round.opensAt, closesAt: round.closesAt, drawAt: round.drawAt, phase: phaseOf(round, now) },
@@ -111,6 +123,16 @@ export async function getBetPage(roundId: number, viewer: SessionUser, rebetBill
       return { id: x.id, label: roundName(x, lang, t), closesAt: x.closesAt };
     }),
     balance: viewer.balance,
-    initialLines: rebet.map((i) => ({ betType: i.bet_type, number: i.number, stake: i.stake })),
+    initialLines: plan.lines,
+    initialPackageId: plan.packageId,
+    rebetNotice: plan.dropped || plan.packageGone ? { dropped: plan.dropped, packageGone: plan.packageGone } : null,
   };
+}
+
+/** The names to show for a round that is on the list but has no prices yet. */
+export async function getUnpricedBetRound(roundId: number) {
+  const { lang, t } = await getI18n();
+  await io();
+  const found = await unpricedRound(roundId, Date.now());
+  return found && { lottoName: lottoName(found.lotto, t), roundLabel: roundName(found.round, lang, t) };
 }

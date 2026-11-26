@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { RoundConfig } from "chokprathan-core/rules/roundConfig";
-import { betWindow, billMoney, discountPercent, liveRate, mergeLines, packageRows, parsePackageId, planPaste, slipDue, unofferedLines } from "./bet-packages";
+import { advertisedRates, rebetPlan, betWindow, billMoney, discountPercent, liveRate, mergeLines, packageRows, parsePackageId, planPaste, slipDue, unofferedLines } from "./bet-packages";
 
 const offered = new Map([
   ["top2", { digits: 2, discountBp: 1500 }],
@@ -97,7 +97,7 @@ describe("mergeLines", () => {
 });
 
 describe("planPaste", () => {
-  const plan = (text: string, taken: string[] = [], closed: string[] = []) => planPaste(text, { offered, taken: new Set(taken), closed: new Set(closed) });
+  const plan = (text: string, taken: string[] = [], closed: string[] = [], room = 500) => planPaste(text, { offered, taken: new Set(taken), closed: new Set(closed), room });
 
   test("takes readable lines with their own stakes", () => {
     const r = plan("12 34 = 50x20");
@@ -119,6 +119,55 @@ describe("planPaste", () => {
   test("a number repeated in the text is a duplicate the second time", () => {
     expect(plan("11 = 5\n11 = 9").rejected).toEqual([{ line: 2, text: "11 = 9", reason: "duplicate" }]);
     expect(plan("11 11 = 5").rejected).toEqual([{ line: 1, text: "11 11 = 5", reason: "duplicate" }]);
+  });
+});
+
+describe("planPaste and the room left in the slip", () => {
+  const plan = (text: string, room: number) => planPaste(text, { offered, taken: new Set(), closed: new Set(), room });
+
+  test("says a line does not fit, not that it cannot be read", () => {
+    expect(plan("11 22 = 5\n33 = 5", 1).rejected).toEqual([{ line: 1, text: "11 22 = 5", reason: "limit" }]);
+    expect(plan("11 22 = 5\n33 = 5", 1).add).toEqual([{ betType: "top2", number: "33", stake: 5 }]);
+  });
+
+  test("counts only lines that are actually added", () => {
+    const many = Array.from({ length: 600 }, () => "1 = 5").join("\n"); // unoffered, takes no room
+    expect(plan(`${many}\n11 = 5`, 1).add).toHaveLength(1);
+  });
+
+  test("names an amount over the largest stake", () => {
+    expect(plan("11 = 5000000", 10).rejected).toEqual([{ line: 1, text: "11 = 5000000", reason: "amount" }]);
+  });
+});
+
+describe("advertisedRates", () => {
+  const current = [{ code: "top3" as const, rate100: 95000 }];
+  test("uses the open round's standard prices, which a bet is taken at", () => {
+    expect(advertisedRates(config, current).find((r) => r.code === "top3")!.rate100).toBe(90000);
+  });
+  test("uses the lottery's current prices when no round has any", () => {
+    expect(advertisedRates(undefined, current)).toEqual(current);
+  });
+});
+
+describe("rebetPlan", () => {
+  const packages = [
+    { id: 1, types: new Set(["top2", "top3"] as const) },
+    { id: 2, types: new Set(["top2"] as const) },
+  ];
+  const lines = [
+    { betType: "top2" as const, number: "25", stake: 10 },
+    { betType: "top3" as const, number: "125", stake: 10 },
+  ];
+
+  test("keeps the bill's package when it is still offered, counting what it does not take", () => {
+    expect(rebetPlan(packages, 2, lines)).toEqual({ packageId: 2, lines: [lines[0]], dropped: 1, packageGone: false });
+  });
+  test("falls back to the standard package and says so", () => {
+    expect(rebetPlan(packages, 7, lines)).toEqual({ packageId: 1, lines, dropped: 0, packageGone: true });
+  });
+  test("a bill from before packages simply starts on the standard one", () => {
+    expect(rebetPlan(packages, null, lines)).toMatchObject({ packageId: 1, packageGone: false });
   });
 });
 

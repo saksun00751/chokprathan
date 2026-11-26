@@ -144,6 +144,8 @@ export const errors: typeof th = {
     digits: "ເລກຕ້ອງມີ {n} ຫຼັກ",
     minStake: "ແທງຂັ້ນຕ່ຳ {n} ບາດ",
     maxPerNumber: "ແທງໄດ້ສູງສຸດ {n} ບາດຕໍ່ເລກ",
+    maxLeft: "ສູງສຸດ {n} ບາດຕໍ່ເລກ ແທງໄດ້ອີກ {left} ບາດ",
+    maxReached: "ເລກນີ້ທ່ານແທງຄົບ {n} ບາດແລ້ວ",
     numberClosed: "ເລກນີ້ປິດຮັບແລ້ວ",
     remaining: "ເລກນີ້ຮັບໄດ້ອີກ {n} ບາດ",
     full: "ເລກນີ້ຮັບເຕັມແລ້ວ",

@@ -42,7 +42,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
   const c_ = t.play.composer;
   const toast = useToast();
   const now = useNow(data.serverNow);
-  const [chosenId, setChosenId] = useState(data.packages[0].id);
+  const [chosenId, setChosenId] = useState(data.initialPackageId);
   // A package staff switched off while the page was open falls back to the standard one, and says so.
   const pack = data.packages.find((p) => p.id === chosenId) ?? data.packages[0];
   const packageGone = pack.id !== chosenId;
@@ -54,7 +54,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
   const badgeList = polled && polled.at > data.serverNow ? polled.list : data.badges;
   const badges = useMemo(() => new Map(badgeList.map((b) => [itemKey(b.betType, b.number), b])), [badgeList]);
 
-  const [chosenTypes, setSelected] = useState<BetTypeCode[]>(() => defaultSelection(data.packages[0].configs));
+  const [chosenTypes, setSelected] = useState<BetTypeCode[]>(() => defaultSelection((data.packages.find((p) => p.id === data.initialPackageId) ?? data.packages[0]).configs));
   const offeredTypes = chosenTypes.filter((c) => configs.has(c));
   const selected = offeredTypes.length ? offeredTypes : defaultSelection(pack.configs);
   const digits = configs.get(selected[0])?.digits ?? 2;
@@ -309,9 +309,19 @@ export function BetComposer({ data }: { data: BetPageData }) {
       )}
 
       {packageGone && (
-        <p role="status" className="mb-5 rounded-card bg-warning-soft p-4 text-sm text-warning">
-          {c_.packageGone}
-        </p>
+        <div role="status" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card bg-warning-soft p-4 text-sm text-warning">
+          <p>{c_.packageGone}</p>
+          <button type="button" onClick={() => setChosenId(pack.id)} className="font-semibold underline">
+            {c_.acknowledge}
+          </button>
+        </div>
+      )}
+
+      {data.rebetNotice && (
+        <div role="status" className="mb-5 flex flex-col gap-1 rounded-card bg-warning-soft p-4 text-sm text-warning">
+          {data.rebetNotice.packageGone && <p>{c_.rebetPackageGone}</p>}
+          {data.rebetNotice.dropped > 0 && <p>{fmt(c_.rebetDropped, { n: data.rebetNotice.dropped })}</p>}
+        </div>
       )}
 
       {stage === "closed" && (
@@ -650,6 +660,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
         open={pasteOpen}
         onClose={() => setPasteOpen(false)}
         offered={configs}
+        room={Math.max(0, data.limits.maxLines - items.length)}
         taken={new Set(items.map((i) => i.key))}
         closed={new Set(badgeList.filter((b) => b.percent === null).map((b) => itemKey(b.betType, b.number)))}
         onAdd={addPasted}

@@ -1,6 +1,8 @@
 import "server-only";
 import type { RoundConfig } from "chokprathan-core/rules/roundConfig";
 import { json, q, q1 } from "@/server/db";
+import { getLotto } from "./lottos";
+import { toRound, type Round, type RoundRow } from "./rounds";
 
 /** The configuration bets on a round are priced against. The back office writes it. */
 export async function getRoundConfig(roundId: number): Promise<{ version: number; config: RoundConfig } | undefined> {
@@ -25,4 +27,26 @@ export async function latestRoundConfigs(roundIds: number[]): Promise<Map<number
     if (config) out.set(r.round_id, config);
   }
   return out;
+}
+
+/** For each lottery, the open round closing first and its prices: what is on sale now. */
+export async function openRoundConfigs(now: number): Promise<Map<number, { round: Round; config: RoundConfig }>> {
+  const rows = await q<RoundRow>("SELECT * FROM rounds WHERE status = 'scheduled' AND opens_at <= ? AND closes_at > ? ORDER BY closes_at", now, now);
+  const first = new Map<number, RoundRow>();
+  for (const row of rows) if (!first.has(row.lotto_id)) first.set(row.lotto_id, row);
+  const configs = await latestRoundConfigs([...first.values()].map((r) => r.id));
+  return new Map(
+    [...first].flatMap(([lottoId, row]) => {
+      const config = configs.get(row.id);
+      return config ? [[lottoId, { round: toRound(row), config }] as const] : [];
+    }),
+  );
+}
+
+/** A round members can see that the back office has not priced yet; null for any other round. */
+export async function unpricedRound(roundId: number, now: number) {
+  const row = await q1<RoundRow>("SELECT * FROM rounds WHERE id = ? AND status = 'scheduled' AND closes_at > ?", roundId, now);
+  if (!row || (await getRoundConfig(row.id))) return null;
+  const lotto = await getLotto(row.lotto_id);
+  return lotto?.enabled ? { round: toRound(row), lotto } : null;
 }

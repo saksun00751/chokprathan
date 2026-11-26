@@ -6,6 +6,7 @@ import { getI18n } from "@/i18n/rsc";
 import { q1 } from "@/server/db";
 import { getLotto } from "@/server/services/lottos";
 import { limitsForRounds } from "@/server/services/risk";
+import { getRoundConfig } from "@/server/services/round-config";
 import { toRound, type RoundRow } from "@/server/services/rounds";
 import { getSettings } from "@/server/services/settings";
 import { getLobby, toLobbyRound, type LobbyRound } from "./lobby";
@@ -62,7 +63,7 @@ export async function getHomeData() {
   if (govRow) {
     const round = toRound(govRow);
     const lotto = await getLotto(round.lottoId);
-    if (lotto) gov = toLobbyRound(round, lotto, now, await getSettings(), 0, lang, t);
+    if (lotto) gov = toLobbyRound(round, lotto, now, await getSettings(), 0, lang, t, (await getRoundConfig(round.id))?.config);
   }
 
   return { serverNow: now, closingSoon, cutSamples, gov };

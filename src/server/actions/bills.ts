@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { BET_TYPE_ORDER } from "chokprathan-core/rules/betTypes";
+import { MAX_STAKE } from "chokprathan-core/rules/slip";
 import { fmt } from "@/i18n/format";
 import { errorsT } from "@/i18n/server";
 import { parsePackageId } from "@/domain/bet-packages";
@@ -15,7 +16,7 @@ import { getViewer } from "@/server/session";
 const lineSchema = z.object({
   betType: z.enum(BET_TYPE_ORDER as [string, ...string[]]),
   number: z.string().regex(/^\d{1,4}$/),
-  stake: z.number().int().positive().max(1_000_000),
+  stake: z.number().int().positive().max(MAX_STAKE),
 });
 const linesSchema = z.array(lineSchema).min(1).max(500);
 

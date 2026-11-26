@@ -2,6 +2,10 @@ import type { play as th } from "../th/play";
 
 export const play: typeof th = {
   composer: {
+    acknowledge: "Got it",
+    rebetPackageGone: "This draw no longer offers the old bill's package. The standard package is used; check the rates before confirming.",
+    rebetDropped: "{n} lines from the old bill were left out: this draw does not take that bet type",
+    notPriced: "The rates for this draw are not ready yet. Try again in a few minutes.",
     package: "Package",
     standard: "Standard",
     discount: "Discount",
@@ -80,7 +84,7 @@ export const play: typeof th = {
     add: "Add {n} lines",
     rejected: "Lines that could not be added",
     line: "Line {n}",
-    reasons: { format: "Format not recognised", unoffered: "This package does not take this bet type", closed: "Includes a closed number", duplicate: "Includes a number already in the slip" },
+    reasons: { amount: "Over the largest stake for one line", limit: "Over the number of lines the slip can take", format: "Format not recognised", unoffered: "This package does not take this bet type", closed: "Includes a closed number", duplicate: "Includes a number already in the slip" },
   },
   keypad: {
     type: "Type a {n}-digit number",
@@ -114,6 +118,8 @@ export const play: typeof th = {
     clearAll: "Clear the whole bill",
   },
   review: {
+    lost: "No answer came back. Confirm again and you will not be charged twice; do not edit the slip first, or check My bills.",
+    quoteLost: "Could not connect. Check your signal, close this and review the slip again.",
     stake: "Stake",
     discount: "Discount",
     pay: "To pay",
