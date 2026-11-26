@@ -3,7 +3,7 @@ import { io } from "next/cache";
 import { betRules } from "chokprathan-core/rules/quote";
 import { STANDARD_PACKAGE } from "@/domain/bet-packages";
 import type { BetTypeCode, LottoGroup, ResultFormat } from "chokprathan-core/rules/types";
-import { lottoName, lottoShort, roundName } from "@/i18n/labels";
+import { lottoName, lottoShort, roundName, scheduledClose } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { json, q, q1 } from "@/server/db";
 import type { SessionUser } from "@/server/services/auth";
@@ -39,7 +39,7 @@ export interface SavedSet {
 
 export interface BetPageData {
   serverNow: number;
-  round: { id: number; label: string; opensAt: number; closesAt: number; drawAt: number; phase: RoundPhase };
+  round: { id: number; label: string; /** the date that names the draw */ scheduledCloseAt: number; opensAt: number; closesAt: number; drawAt: number; phase: RoundPhase };
   lotto: { id: number; slug: string; name: string; shortName: string; flag: string | null; format: ResultFormat; group: LottoGroup };
   /** Never empty; the first one is preselected. */
   packages: BetPackageView[];
@@ -100,7 +100,7 @@ export async function getBetPage(roundId: number, viewer: SessionUser, rebetBill
 
   return {
     serverNow: now,
-    round: { id: round.id, label: roundName(round, lang, t), opensAt: round.opensAt, closesAt: round.closesAt, drawAt: round.drawAt, phase: phaseOf(round, now) },
+    round: { id: round.id, label: roundName(round, lang, t), scheduledCloseAt: scheduledClose(round), opensAt: round.opensAt, closesAt: round.closesAt, drawAt: round.drawAt, phase: phaseOf(round, now) },
     lotto: { id: lotto.id, slug: lotto.slug, name: lottoName(lotto, t), shortName: lottoShort(lotto, t), flag: lotto.flag, format: lotto.format, group: lotto.group },
     packages,
     limits: { minStake: Math.min(...packages.flatMap((p) => p.configs.map((c) => c.minStake))), maxPerBill: stored.config.maxPerBill, maxLines: stored.config.maxLines },

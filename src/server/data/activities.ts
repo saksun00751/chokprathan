@@ -35,13 +35,13 @@ export async function getActivitiesPage() {
     const l = lottos.find((x) => x.id === id);
     return l ? lottoShort(l, t) : "-";
   };
-  const label = (r: { lotto_id: number; round_no: number | null; closes_at: number }) =>
-    `${lottoName(r.lotto_id)} ${roundName({ roundNo: r.round_no, closesAt: r.closes_at }, lang, t)}`;
+  const label = (r: { lotto_id: number; round_no: number | null; closes_at: number; planned_close: number | null }) =>
+    `${lottoName(r.lotto_id)} ${roundName({ roundNo: r.round_no, closesAt: r.closes_at, plannedClose: r.planned_close }, lang, t)}`;
 
   const rounds =
     guess.enabled && guess.lottoIds.length > 0
-      ? await q<{ id: number; lotto_id: number; round_no: number | null; closes_at: number }>(
-          `SELECT id, lotto_id, round_no, closes_at FROM rounds
+      ? await q<{ id: number; lotto_id: number; round_no: number | null; closes_at: number; planned_close: number | null }>(
+          `SELECT id, lotto_id, round_no, closes_at, planned_close FROM rounds
            WHERE lotto_id IN (${guess.lottoIds.map(() => "?").join(", ")}) AND status = 'scheduled' AND opens_at <= ? AND closes_at > ?
            ORDER BY closes_at LIMIT 12`,
           ...guess.lottoIds,
@@ -75,8 +75,9 @@ export async function getActivitiesPage() {
             lotto_id: number;
             round_no: number | null;
             closes_at: number;
+            planned_close: number | null;
           }>(
-            `SELECT g.id, g.round_id, g.number, g.status, g.paid, g.created_at, r.lotto_id, r.round_no, r.closes_at
+            `SELECT g.id, g.round_id, g.number, g.status, g.paid, g.created_at, r.lotto_id, r.round_no, r.closes_at, r.planned_close
              FROM point_guesses g JOIN rounds r ON r.id = g.round_id WHERE g.user_id = ? ORDER BY g.id DESC LIMIT 30`,
             viewer.id,
           ),

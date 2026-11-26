@@ -128,6 +128,7 @@ export interface LatestResult {
   label: string;
   roundNo: number | null;
   closesAt: number;
+  plannedClose: number | null;
   resultedAt: number;
   result: RoundResult;
 }
@@ -160,6 +161,7 @@ export async function getLatestResults(limit = 40): Promise<{ serverNow: number;
         label: "",
         roundNo: r.roundNo,
         closesAt: r.closesAt,
+        plannedClose: r.plannedClose,
         resultedAt: r.resultedAt ?? r.closesAt,
         result: r.result,
       });

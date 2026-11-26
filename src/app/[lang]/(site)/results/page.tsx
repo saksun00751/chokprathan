@@ -6,6 +6,7 @@ import { Flag } from "@/components/ui/flag";
 import { Card, PageHeader, SectionTitle, Skeleton } from "@/components/ui/primitives";
 import { byGroup } from "@/domain/lotto-groups";
 import { fmt, formatClock, formatDate, formatDateTime } from "@/i18n/format";
+import { scheduledClose } from "@/i18n/labels";
 import { getI18n, pageMeta } from "@/i18n/rsc";
 import { getGroups } from "@/server/data/groups";
 import { getLatestResults } from "@/server/data/lobby";
@@ -41,7 +42,7 @@ async function ResultsBody() {
             <Flag code="TH" className="size-9" />
             <div className="min-w-0 flex-1">
               <h2 className="text-lg font-semibold">{gov.name}</h2>
-              <p className="text-sm text-ink-2">{fmt(r_.govDraw, { date: formatDate(gov.closesAt, lang, "long") })}</p>
+              <p className="text-sm text-ink-2">{fmt(r_.govDraw, { date: formatDate(scheduledClose(gov), lang, "long") })}</p>
             </div>
             <Link href="/results/thai-gov" className="text-sm font-semibold text-brand hover:underline">
               {r_.history}

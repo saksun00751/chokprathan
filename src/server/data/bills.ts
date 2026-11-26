@@ -47,8 +47,9 @@ export async function getMyBills(userId: number, filter: BillFilter, limit = 50)
     lotto_id: number;
     round_no: number | null;
     closes_at: number;
+    planned_close: number | null;
   }>(
-    `SELECT b.id, b.code, b.status, b.total_stake, b.total_payout, b.created_at, r.lotto_id, r.round_no, r.closes_at
+    `SELECT b.id, b.code, b.status, b.total_stake, b.total_payout, b.created_at, r.lotto_id, r.round_no, r.closes_at, r.planned_close
      FROM bills b JOIN rounds r ON r.id = b.round_id
      WHERE b.user_id = ? ${FILTER_SQL[filter]}
      ORDER BY b.created_at DESC LIMIT ?`,
@@ -88,7 +89,7 @@ export async function getMyBills(userId: number, filter: BillFilter, limit = 50)
         createdAt: r.created_at,
         lottoName: lotto ? lottoShort(lotto, t) : "-",
         flag: lotto?.flag ?? null,
-        roundLabel: roundName({ roundNo: r.round_no, closesAt: r.closes_at }, lang, t),
+        roundLabel: roundName({ roundNo: r.round_no, closesAt: r.closes_at, plannedClose: r.planned_close }, lang, t),
         itemCount: p?.n ?? 0,
         preview: p?.numbers.join(" ") ?? "",
       };

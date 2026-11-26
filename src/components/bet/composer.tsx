@@ -266,7 +266,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
             <h1 className="truncate text-lg leading-tight font-semibold sm:text-xl">{data.lotto.name}</h1>
             <p className="truncate text-sm text-ink-2">
               {data.round.label}
-              {!isYiki && <span className="hidden sm:inline"> · {formatDate(data.round.closesAt, lang, "long")}</span>}
+              {!isYiki && <span className="hidden sm:inline"> · {formatDate(data.round.scheduledCloseAt, lang, "long")}</span>}
             </p>
           </div>
           <div className="text-right">

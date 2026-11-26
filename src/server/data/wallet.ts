@@ -34,8 +34,8 @@ export async function getTransactions(userId: number, filter: TxFilter = "all", 
   const { lang, t } = await getI18n();
   await io();
   // Notes are stored in Thai when the row is written; bet rows get their label from the bill instead.
-  const rows = await q<Omit<TxRow, "detail"> & { slug: string | null; short_name: string | null; round_no: number | null; closes_at: number | null }>(
-    `SELECT t.id, t.wallet, t.type, t.amount, t.balance_after, t.ref, t.created_at, l.slug, l.short_name, r.round_no, r.closes_at
+  const rows = await q<Omit<TxRow, "detail"> & { slug: string | null; short_name: string | null; round_no: number | null; closes_at: number | null; planned_close: number | null }>(
+    `SELECT t.id, t.wallet, t.type, t.amount, t.balance_after, t.ref, t.created_at, l.slug, l.short_name, r.round_no, r.closes_at, r.planned_close
      FROM (SELECT * FROM transactions WHERE user_id = ? AND wallet = 'balance' ${TX_SQL[filter]} ORDER BY created_at DESC, id DESC LIMIT ?) t
      LEFT JOIN bills b ON b.code = t.ref AND t.type IN ('bet','win','refund','win_correction')
      LEFT JOIN rounds r ON r.id = b.round_id
@@ -44,11 +44,11 @@ export async function getTransactions(userId: number, filter: TxFilter = "all", 
     userId,
     limit,
   );
-  return rows.map(({ slug, short_name, round_no, closes_at, ...row }) => ({
+  return rows.map(({ slug, short_name, round_no, closes_at, planned_close, ...row }) => ({
     ...row,
     detail:
       slug && closes_at != null
-        ? `${lottoShort({ slug, shortName: short_name ?? slug }, t)} ${roundName({ roundNo: round_no, closesAt: closes_at }, lang, t)}`
+        ? `${lottoShort({ slug, shortName: short_name ?? slug }, t)} ${roundName({ roundNo: round_no, closesAt: closes_at, plannedClose: planned_close }, lang, t)}`
         : null,
   }));
 }

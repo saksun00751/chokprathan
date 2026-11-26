@@ -1,4 +1,5 @@
 import "server-only";
+import { scheduledClose } from "@/i18n/labels";
 import { io } from "next/cache";
 import type { ArtKey } from "@/components/art/keys";
 import { formatRate } from "chokprathan-core/rules/money";
@@ -64,7 +65,7 @@ export async function getHomeSlides(loggedIn: boolean): Promise<{ serverNow: num
     slides.splice(Math.min(1, slides.length), 0, {
       id: "gov",
       tag: g.tag,
-      title: fmt(g.title, { date: formatDate(round.closesAt, lang), rate: formatRate(rate) }),
+      title: fmt(g.title, { date: formatDate(scheduledClose(round), lang), rate: formatRate(rate) }),
       subtitle: g.subtitle,
       ctaLabel: g.cta,
       ctaHref: `/lotto/${round.id}`,
@@ -73,7 +74,7 @@ export async function getHomeSlides(loggedIn: boolean): Promise<{ serverNow: num
       imageUrl: null,
       showText: true,
       countdownTo: round.closesAt,
-      artLabel: fmt(t.lotto.round.dated, { date: formatDate(round.closesAt, lang) }),
+      artLabel: fmt(t.lotto.round.dated, { date: formatDate(scheduledClose(round), lang) }),
     });
   }
   return { serverNow: now, slides };
