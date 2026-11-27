@@ -919,6 +919,11 @@ export const MIGRATIONS: Migration[] = [
     // How much of the member's turnover requirement this bill's payout counted off, so voiding can put exactly that back.
     statements: ["ALTER TABLE bills ADD COLUMN IF NOT EXISTS turnover_taken BIGINT NULL"],
   },
+  {
+    version: 17,
+    name: "lotto names per language",
+    statements: ["ALTER TABLE lottos ADD COLUMN IF NOT EXISTS i18n TEXT NULL"],
+  },
 ];
 
 /** A MariaDB string literal (only for the fixed, trusted text above). */

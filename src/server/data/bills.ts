@@ -87,7 +87,7 @@ export async function getMyBills(userId: number, filter: BillFilter, limit = 50)
         totalStake: r.total_stake,
         totalPayout: r.total_payout,
         createdAt: r.created_at,
-        lottoName: lotto ? lottoShort(lotto, t) : "-",
+        lottoName: lotto ? lottoShort(lotto, lang, t) : "-",
         flag: lotto?.flag ?? null,
         roundLabel: roundName({ roundNo: r.round_no, closesAt: r.closes_at, plannedClose: r.planned_close }, lang, t),
         itemCount: p?.n ?? 0,
@@ -159,7 +159,7 @@ export async function getMyBill(userId: number, billId: number): Promise<BillDet
     totalPayout: b.total_payout,
     createdAt: b.created_at,
     settledAt: b.settled_at,
-    lotto: { slug: lotto.slug, name: lottoName(lotto, t), flag: lotto.flag, format: lotto.format },
+    lotto: { slug: lotto.slug, name: lottoName(lotto, lang, t), flag: lotto.flag, format: lotto.format },
     round: { id: round.id, label: roundName(round, lang, t), closesAt: round.closesAt, drawAt: round.drawAt, result: round.result },
     items: items.map((i) => ({
       id: i.id,

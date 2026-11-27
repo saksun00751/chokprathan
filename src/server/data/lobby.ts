@@ -43,8 +43,8 @@ export function toLobbyRound(round: Round, lotto: Lotto, now: number, settings: 
     id: round.id,
     lottoId: lotto.id,
     slug: lotto.slug,
-    name: lottoName(lotto, t),
-    shortName: lottoShort(lotto, t),
+    name: lottoName(lotto, lang, t),
+    shortName: lottoShort(lotto, lang, t),
     group: lotto.group,
     flag: lotto.flag,
     label: roundName(round, lang, t),
@@ -130,6 +130,7 @@ export interface LatestResult {
   slug: string;
   name: string;
   shortName: string;
+  i18n: Lotto["i18n"];
   group: LottoGroup;
   flag: string | null;
   format: Lotto["format"];
@@ -163,6 +164,7 @@ export async function getLatestResults(limit = 40): Promise<{ serverNow: number;
         slug: lotto.slug,
         name: lotto.name,
         shortName: lotto.shortName,
+        i18n: lotto.i18n,
         group: lotto.group,
         flag: lotto.flag,
         format: lotto.format,
@@ -176,6 +178,6 @@ export async function getLatestResults(limit = 40): Promise<{ serverNow: number;
     }
     return out.sort((a, b) => b.resultedAt - a.resultedAt);
   });
-  const results = raw.slice(0, limit).map((r) => ({ ...r, name: lottoName(r, t), shortName: lottoShort(r, t), label: roundName(r, lang, t) }));
+  const results = raw.slice(0, limit).map((r) => ({ ...r, name: lottoName(r, lang, t), shortName: lottoShort(r, lang, t), label: roundName(r, lang, t) }));
   return { serverNow: Date.now(), results };
 }

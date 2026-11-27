@@ -113,7 +113,7 @@ export async function getBetPage(roundId: number, viewer: SessionUser, rebetBill
   return {
     serverNow: now,
     round: { id: round.id, label: roundName(round, lang, t), scheduledCloseAt: scheduledClose(round), opensAt: round.opensAt, closesAt: round.closesAt, drawAt: round.drawAt, phase: phaseOf(round, now) },
-    lotto: { id: lotto.id, slug: lotto.slug, name: lottoName(lotto, t), shortName: lottoShort(lotto, t), flag: lotto.flag, format: lotto.format, group: lotto.group },
+    lotto: { id: lotto.id, slug: lotto.slug, name: lottoName(lotto, lang, t), shortName: lottoShort(lotto, lang, t), flag: lotto.flag, format: lotto.format, group: lotto.group },
     packages,
     limits: { minStake: Math.min(...packages.flatMap((p) => p.configs.map((c) => c.minStake))), maxPerBill: stored.config.maxPerBill, maxLines: stored.config.maxLines },
     badges,
@@ -134,5 +134,5 @@ export async function getUnpricedBetRound(roundId: number) {
   const { lang, t } = await getI18n();
   await io();
   const found = await unpricedRound(roundId, Date.now());
-  return found && { lottoName: lottoName(found.lotto, t), roundLabel: roundName(found.round, lang, t) };
+  return found && { lottoName: lottoName(found.lotto, lang, t), roundLabel: roundName(found.round, lang, t) };
 }

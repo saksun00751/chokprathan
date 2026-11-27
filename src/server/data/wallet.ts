@@ -9,6 +9,7 @@ import { json, q, q1, run } from "@/server/db";
 import { depositsForUser, type WithdrawalRow } from "@/server/services/finance";
 import { getSetting, getSettings } from "@/server/services/settings";
 import { receivingAccount } from "@/server/services/banks";
+import { listLottos } from "@/server/services/lottos";
 
 export interface TxRow {
   id: number;
@@ -34,23 +35,27 @@ export async function getTransactions(userId: number, filter: TxFilter = "all", 
   const { lang, t } = await getI18n();
   await io();
   // Notes are stored in Thai when the row is written; bet rows get their label from the bill instead.
-  const rows = await q<Omit<TxRow, "detail"> & { slug: string | null; short_name: string | null; round_no: number | null; closes_at: number | null; planned_close: number | null }>(
-    `SELECT t.id, t.wallet, t.type, t.amount, t.balance_after, t.ref, t.created_at, l.slug, l.short_name, r.round_no, r.closes_at, r.planned_close
+  const rows = await q<Omit<TxRow, "detail"> & { lotto_id: number | null; round_no: number | null; closes_at: number | null; planned_close: number | null }>(
+    `SELECT t.id, t.wallet, t.type, t.amount, t.balance_after, t.ref, t.created_at, r.lotto_id, r.round_no, r.closes_at, r.planned_close
      FROM (SELECT * FROM transactions WHERE user_id = ? AND wallet = 'balance' ${TX_SQL[filter]} ORDER BY created_at DESC, id DESC LIMIT ?) t
      LEFT JOIN bills b ON b.code = t.ref AND t.type IN ('bet','win','refund','win_correction')
      LEFT JOIN rounds r ON r.id = b.round_id
-     LEFT JOIN lottos l ON l.id = r.lotto_id
      ORDER BY t.created_at DESC, t.id DESC`,
     userId,
     limit,
   );
-  return rows.map(({ slug, short_name, round_no, closes_at, planned_close, ...row }) => ({
-    ...row,
-    detail:
-      slug && closes_at != null
-        ? `${lottoShort({ slug, shortName: short_name ?? slug }, t)} ${roundName({ roundNo: round_no, closesAt: closes_at, plannedClose: planned_close }, lang, t)}`
-        : null,
-  }));
+  // Named from the catalog, which reads whatever columns `lottos` has.
+  const lottos = new Map((await listLottos({ includeDisabled: true })).map((l) => [l.id, l]));
+  return rows.map(({ lotto_id, round_no, closes_at, planned_close, ...row }) => {
+    const lotto = lotto_id == null ? undefined : lottos.get(lotto_id);
+    return {
+      ...row,
+      detail:
+        lotto && closes_at != null
+          ? `${lottoShort(lotto, lang, t)} ${roundName({ roundNo: round_no, closesAt: closes_at, plannedClose: planned_close }, lang, t)}`
+          : null,
+    };
+  });
 }
 
 export async function getWalletOverview(userId: number) {

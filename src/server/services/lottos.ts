@@ -1,6 +1,7 @@
 import "server-only";
 import { BET_TYPES, betTypesFor } from "@/core/rules/betTypes";
 import type { BetTypeCode, LottoGroup, ResultFormat, RiskProfile, Schedule } from "@/core/rules/types";
+import type { LottoI18n } from "@/i18n/labels";
 import { invalidate, memo } from "@/server/cache";
 import { LOTTOS_TTL_MS } from "@/server/cache-ttl";
 import { afterCommit, json, q } from "@/server/db";
@@ -17,6 +18,8 @@ export interface Lotto {
   slug: string;
   name: string;
   shortName: string;
+  /** Names in the other languages. */
+  i18n: LottoI18n;
   group: LottoGroup;
   format: ResultFormat;
   schedule: Schedule;
@@ -35,6 +38,8 @@ interface LottoRow {
   slug: string;
   name: string;
   short_name: string;
+  /** Absent before member migration 17. */
+  i18n?: string | null;
   grp: LottoGroup;
   format: ResultFormat;
   schedule: string;
@@ -54,6 +59,7 @@ function toLotto(r: LottoRow): Lotto {
     slug: r.slug,
     name: r.name,
     shortName: r.short_name,
+    i18n: json.parse<LottoI18n>(r.i18n, {}) ?? {},
     group: r.grp,
     format: r.format,
     schedule: json.parse<Schedule>(r.schedule, { kind: "weekly", days: [], close: "00:00" }),

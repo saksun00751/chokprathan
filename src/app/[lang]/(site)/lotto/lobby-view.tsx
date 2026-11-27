@@ -144,7 +144,9 @@ export function LobbyView({ data, groups: allGroups, initialGroup }: { data: Lob
                 <Link href={`/lotto/${r.id}`} prefetch={false} className="flex items-center gap-3 px-4 py-3 hover:bg-panel">
                   <Flag code="YK" className="size-6" />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold">{r.label}</span>
+                    <span className="block text-sm font-semibold">
+                      {r.shortName} {r.label}
+                    </span>
                     <span className="block text-xs text-ink-3">
                       {lb.card.closes} <span className="tnum">{formatClock(r.closesAt)}</span>
                       {r.cutCount > 0 && <span className="ml-2 font-semibold text-warning">{fmt(lb.card.cuts, { n: r.cutCount })}</span>}

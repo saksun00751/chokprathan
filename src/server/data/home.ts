@@ -92,7 +92,7 @@ export async function getMemberSummary(userId: number) {
   if (lastWin) {
     const round = toRound(lastWin);
     const lotto = await getLotto(round.lottoId);
-    if (lotto) lastWinInfo = { amount: lastWin.total_payout, at: lastWin.bill_settled_at, lotto: lottoShort(lotto, t), label: roundName(round, lang, t) };
+    if (lotto) lastWinInfo = { amount: lastWin.total_payout, at: lastWin.bill_settled_at, lotto: lottoShort(lotto, lang, t), label: roundName(round, lang, t) };
   }
   return {
     pendingBills: r.n,

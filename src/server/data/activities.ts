@@ -33,7 +33,7 @@ export async function getActivitiesPage() {
   const lottos = await listLottos({ includeDisabled: true });
   const lottoName = (id: number) => {
     const l = lottos.find((x) => x.id === id);
-    return l ? lottoShort(l, t) : "-";
+    return l ? lottoShort(l, lang, t) : "-";
   };
   const label = (r: { lotto_id: number; round_no: number | null; closes_at: number; planned_close: number | null }) =>
     `${lottoName(r.lotto_id)} ${roundName({ roundNo: r.round_no, closesAt: r.closes_at, plannedClose: r.planned_close }, lang, t)}`;

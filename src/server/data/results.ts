@@ -6,26 +6,19 @@ import { advertisedRates, packageRows, STANDARD_PACKAGE } from "@/domain/bet-pac
 import { lottoName, lottoShort, roundName } from "@/i18n/labels";
 import { getI18n } from "@/i18n/rsc";
 import { memo } from "@/server/cache";
-import { RESULTS_HISTORY_TTL_MS, RESULTS_TTL_MS } from "@/server/cache-ttl";
+import { RESULTS_HISTORY_TTL_MS } from "@/server/cache-ttl";
 import { q } from "@/server/db";
 import { betConfigs, getLottoBySlug, listLottos } from "@/server/services/lottos";
 import { openRoundConfigs } from "@/server/services/round-config";
 import { toRound, type RoundRow } from "@/server/services/rounds";
 import { getSettings } from "@/server/services/settings";
 
+/** The latest rounds of each yiki lottery; one with no result yet is left out. */
 export async function getYikiRecent(limit = 12) {
-  const { lang, t } = await getI18n();
   await io();
-  const rows = await memo("results:yiki", RESULTS_TTL_MS, () =>
-    q<RoundRow>(
-      `SELECT r.* FROM rounds r JOIN lottos l ON l.id = r.lotto_id
-       WHERE l.slug = 'yiki' AND r.status = 'resulted' ORDER BY r.closes_at DESC LIMIT 40`,
-    ),
-  );
-  return rows.slice(0, limit).map((row) => {
-    const r = toRound(row);
-    return { id: r.id, label: roundName(r, lang, t), closesAt: r.closesAt, result: r.result! };
-  });
+  const lottos = (await listLottos()).filter((l) => l.group === "yiki");
+  const histories = await Promise.all(lottos.map((l) => getLottoHistory(l.slug, limit)));
+  return histories.flatMap((h) => (h && h.rounds.length > 0 ? [h] : []));
 }
 
 export async function getLottoHistory(slug: string, limit = 30) {
@@ -40,16 +33,16 @@ export async function getLottoHistory(slug: string, limit = 30) {
     const r = toRound(row);
     return { id: r.id, label: roundName(r, lang, t), closesAt: r.closesAt, result: r.result! };
   });
-  return { lotto: { slug: lotto.slug, name: lottoName(lotto, t), flag: lotto.flag, format: lotto.format, group: lotto.group }, rounds };
+  return { lotto: { slug: lotto.slug, name: lottoName(lotto, lang, t), flag: lotto.flag, format: lotto.format, group: lotto.group }, rounds };
 }
 
 export async function getRateTables() {
-  const { t } = await getI18n();
+  const { lang, t } = await getI18n();
   await io();
   const [lottos, settings, open] = await Promise.all([listLottos(), getSettings(), openRoundConfigs(Date.now())]);
   const rows = lottos.map((l) => ({
     slug: l.slug,
-    name: lottoShort(l, t),
+    name: lottoShort(l, lang, t),
     group: l.group,
     flag: l.flag,
     rates: Object.fromEntries(advertisedRates(open.get(l.id)?.config, betConfigs(l, settings)).map((c) => [c.code, c.rate100])) as Partial<Record<BetTypeCode, number>>,
@@ -75,6 +68,6 @@ export async function getOpenPackages() {
     const on = open.get(lotto.id);
     const packages = on ? packageRows(on.config).filter((p) => p.code !== STANDARD_PACKAGE) : [];
     if (!on || packages.length === 0) return [];
-    return [{ slug: lotto.slug, name: lottoShort(lotto, t), flag: lotto.flag, round: roundName(on.round, lang, t), packages }];
+    return [{ slug: lotto.slug, name: lottoShort(lotto, lang, t), flag: lotto.flag, round: roundName(on.round, lang, t), packages }];
   });
 }

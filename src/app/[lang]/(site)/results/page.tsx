@@ -30,7 +30,7 @@ async function ResultsBody() {
   const [{ results }, yiki, allGroups, { lang, t }] = await Promise.all([getLatestResults(60), getYikiRecent(12), getGroups(), getI18n()]);
   const r_ = t.info.results;
   const gov = results.find((r) => r.slug === "thai-gov");
-  // Yiki has its own table below, and the government draw its own card above.
+  // Yiki has its own tables below, and the government draw its own card above.
   const sections = byGroup(results.filter((r) => r.group !== "yiki" && r.slug !== "thai-gov"), allGroups);
   const labelOf = (code: string) => allGroups.find((g) => g.code === code)?.label ?? code;
 
@@ -75,17 +75,17 @@ async function ResultsBody() {
         );
       })}
 
-      {yiki.length > 0 && (
-        <section aria-labelledby="r-yiki">
+      {yiki.map(({ lotto, rounds }) => (
+        <section key={lotto.slug} aria-labelledby={`r-${lotto.slug}`}>
           <SectionTitle
-            id="r-yiki"
+            id={`r-${lotto.slug}`}
             action={
-              <Link href="/results/yiki" className="text-sm font-semibold text-brand hover:underline">
+              <Link href={`/results/${lotto.slug}`} className="text-sm font-semibold text-brand hover:underline">
                 {r_.allRounds}
               </Link>
             }
           >
-            {labelOf("yiki")}
+            {lotto.name}
           </SectionTitle>
           <Card className="overflow-x-auto">
             <table className="w-full min-w-[420px] text-sm">
@@ -98,7 +98,7 @@ async function ResultsBody() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {yiki.map((r) => (
+                {rounds.map((r) => (
                   <tr key={r.id}>
                     <td className="px-4 py-2.5 font-medium">{r.label}</td>
                     <td className="tnum px-4 py-2.5 text-ink-2">{formatDateTime(r.closesAt, lang)}</td>
@@ -110,7 +110,7 @@ async function ResultsBody() {
             </table>
           </Card>
         </section>
-      )}
+      ))}
     </div>
   );
 }
