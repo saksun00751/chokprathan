@@ -1,12 +1,15 @@
 import type { MetadataRoute } from "next";
 import { BRAND } from "@/config/brand";
+import { pickText } from "@/domain/branding";
+import { getBranding } from "@/server/branding";
 
 /** Colors are sRGB equivalents of the canvas/brand OKLCH tokens (launchers don't parse OKLCH). */
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const b = await getBranding();
   return {
-    name: BRAND.name,
-    short_name: BRAND.shortName,
-    description: BRAND.description,
+    name: pickText(b.name, "th") ?? BRAND.name,
+    short_name: pickText(b.name, "th") ?? BRAND.shortName,
+    description: pickText(b.description, "th") ?? BRAND.description,
     lang: "th",
     start_url: "/",
     scope: "/",

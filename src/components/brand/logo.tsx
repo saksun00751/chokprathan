@@ -1,4 +1,5 @@
 import { getI18n } from "@/i18n/rsc";
+import { getBranding } from "@/server/branding";
 
 /** Ticket silhouette with a perforated stub and a gold coin. */
 export function LogoMark({ className = "size-8" }: { className?: string }) {
@@ -21,7 +22,7 @@ export function LogoMark({ className = "size-8" }: { className?: string }) {
   );
 }
 
-/** Mark plus the brand name in the page's language (Server Component). */
+/** The uploaded logo (or the built-in mark) plus the brand name in the page's language (Server Component). */
 export async function Logo({
   className = "",
   nameClassName = "",
@@ -32,15 +33,21 @@ export async function Logo({
   nameClassName?: string;
   tone?: "ink" | "white";
 }) {
-  const { t } = await getI18n();
+  const [{ t }, { logo, hideName }] = await Promise.all([getI18n(), getBranding()]);
+  const nameHidden = !!logo && hideName;
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>
-      <LogoMark className="size-8 shrink-0" />
-      <span
-        className={`whitespace-nowrap text-lg font-semibold tracking-tight ${tone === "white" ? "text-white" : "text-ink"} ${nameClassName}`}
-      >
-        {t.common.brand}
-      </span>
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/media/${logo}`} alt={nameHidden ? t.common.brand : ""} className="h-8 w-auto max-w-40 shrink-0 object-contain" />
+      ) : (
+        <LogoMark className="size-8 shrink-0" />
+      )}
+      {!nameHidden && (
+        <span className={`whitespace-nowrap text-lg font-semibold tracking-tight ${tone === "white" ? "text-white" : "text-ink"} ${nameClassName}`}>
+          {t.common.brand}
+        </span>
+      )}
     </span>
   );
 }

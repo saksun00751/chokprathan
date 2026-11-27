@@ -552,7 +552,7 @@ export function BetComposer({ data }: { data: BetPageData }) {
       </div>
 
       {/* mobile slip bar: replaces the bottom nav while betting */}
-      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface px-4 pt-2.5 pb-2.5 shadow-bar lg:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface px-4 pt-2.5 pb-[max(env(safe-area-inset-bottom),0.625rem)] shadow-bar lg:hidden">
         <div className="mx-auto flex max-w-lg items-center gap-3">
           <button type="button" onClick={() => setSlipOpen(true)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={c_.openSlip}>
             <ChevronUp className="size-5 text-ink-3" aria-hidden="true" />

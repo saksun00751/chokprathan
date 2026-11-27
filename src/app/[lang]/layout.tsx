@@ -5,9 +5,11 @@ import { lang as rootLang } from "next/root-params";
 import { BRAND } from "@/config/brand";
 import { ArtDefs } from "@/components/art/defs";
 import { ToastProvider } from "@/components/ui/toast";
+import { applyBranding } from "@/domain/branding";
 import { I18nProvider } from "@/i18n/client";
 import { LOCALES, LOCALE_META, isLocale, type Locale } from "@/i18n/config";
 import { loadDict } from "@/i18n/dictionaries";
+import { getBranding } from "@/server/branding";
 import { getThemeId } from "@/server/theme";
 import "../globals.css";
 
@@ -38,7 +40,8 @@ export const instant = false;
 export async function generateMetadata(): Promise<Metadata> {
   const lang = await rootLang();
   if (!isLocale(lang)) return {};
-  const t = await loadDict(lang);
+  const [dict, branding] = await Promise.all([loadDict(lang), getBranding()]);
+  const t = applyBranding(dict, branding, lang);
   return {
     metadataBase: new URL(BRAND.siteUrl),
     title: { default: `${t.common.brand} · ${t.meta.tagline}`, template: `%s · ${t.common.brand}` },
@@ -46,6 +49,7 @@ export async function generateMetadata(): Promise<Metadata> {
     applicationName: t.common.brand,
     appleWebApp: { capable: true, title: t.common.brand, statusBarStyle: "default" },
     formatDetection: { telephone: false },
+    ...(branding.share ? { openGraph: { type: "website", images: [`/media/${branding.share}`] } } : {}),
     alternates: { languages: Object.fromEntries(LOCALES.map((l) => [LOCALE_META[l].htmlLang, `/${l}`])) },
   };
 }
@@ -60,7 +64,8 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: LayoutProps<"/[lang]">) {
   const lang = await rootLang();
   if (!isLocale(lang)) notFound();
-  const [t, theme] = await Promise.all([loadDict(lang), getThemeId()]);
+  const [dict, theme, branding] = await Promise.all([loadDict(lang), getThemeId(), getBranding()]);
+  const t = applyBranding(dict, branding, lang);
   // Client Components get the member-facing namespaces; the back office adds its own.
   const clientDict = { common: t.common, lotto: t.lotto, site: t.site };
   return (

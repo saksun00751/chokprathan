@@ -3,6 +3,7 @@ import { errorsT } from "@/i18n/server";
 import { randomBytes } from "node:crypto";
 import { detectImageType, IMAGE_MIME } from "@/domain/banner";
 import { q1, run } from "@/server/db";
+import { compressImage } from "@/server/images";
 import { getFirst, gridStore, putWithFallback, removeAll, type MediaFile, type MediaKind, type MediaStore } from "@/server/media-store";
 import { MEDIA_BUCKET, mongoDb } from "@/server/mongo";
 
@@ -55,10 +56,11 @@ export async function saveImage(
   const e = (await errorsT()).upload;
   if (bytes.length === 0) return { ok: false, error: e.empty };
   if (bytes.length > MAX_UPLOAD_BYTES) return { ok: false, error: e.tooBig };
-  const type = detectImageType(bytes);
-  if (!type) return { ok: false, error: e.type };
-  const name = `${prefix.replace(/[^a-z0-9-]/g, "").slice(0, 20)}-${randomBytes(8).toString("hex")}.${type}`;
-  await putWithFallback(await stores(), { name, bytes: Buffer.from(bytes), mime: IMAGE_MIME[type], kind, ownerId, createdAt: Date.now() });
+  if (!detectImageType(bytes)) return { ok: false, error: e.type };
+  const image = await compressImage(bytes, kind);
+  if (!image.ok) return { ok: false, error: e.type };
+  const name = `${prefix.replace(/[^a-z0-9-]/g, "").slice(0, 20)}-${randomBytes(8).toString("hex")}.webp`;
+  await putWithFallback(await stores(), { name, bytes: image.bytes, mime: IMAGE_MIME.webp, kind, ownerId, createdAt: Date.now() });
   return { ok: true, name };
 }
 
